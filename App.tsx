@@ -3,6 +3,23 @@ import Layout from './components/Layout';
 import { useViability } from './hooks/useViability';
 import { ScenarioType, MonthlyResult } from './types';
 import { FRANCA_STATS } from './constants';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  ComposedChart,
+  ReferenceLine,
+} from 'recharts';
 
 const formatCurrency = (value?: number) =>
   typeof value === 'number'
@@ -52,6 +69,8 @@ const App: React.FC = () => {
     resetParams,
     supplyBottleneck,
     oversupplyWarning,
+    paramsMap,
+    calculateProjections,
   } = useViability();
 
   const currentMonth = projections[0];
@@ -142,6 +161,257 @@ const App: React.FC = () => {
     </div>
   );
 
+  const renderBench = () => (
+    <div className="space-y-6">
+      <h3 className="text-sm font-black uppercase text-yellow-500">Benchmark / Market Share</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <div className="text-[10px] uppercase text-slate-400 font-black mb-2">Participação de Mercado</div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={FRANCA_STATS.marketPlayers}>
+              <CartesianGrid vertical={false} stroke="#1e293b" />
+              <XAxis dataKey="name" stroke="#475569" fontSize={10} />
+              <YAxis stroke="#475569" fontSize={10} />
+              <Tooltip contentStyle={{ backgroundColor: '#020617', border: 'none', fontSize: 10 }} />
+              <Bar dataKey="share" fill="#EAB308" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <div className="text-[10px] uppercase text-slate-400 font-black mb-2">Ticket Médio (R$)</div>
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={FRANCA_STATS.marketPlayers}>
+              <CartesianGrid vertical={false} stroke="#1e293b" />
+              <XAxis dataKey="name" stroke="#475569" fontSize={10} />
+              <YAxis stroke="#475569" fontSize={10} />
+              <Tooltip contentStyle={{ backgroundColor: '#020617', border: 'none', fontSize: 10 }} />
+              <Line type="monotone" dataKey="ticket" stroke="#38bdf8" strokeWidth={3} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderMarketing = () => {
+    const data = [
+      { name: 'Marketing', value: currentParams.marketingMonthly },
+      { name: 'Tech', value: currentParams.techMonthly },
+      { name: 'Adesão Turbo', value: currentParams.adesaoTurbo },
+      { name: 'Tráfego Pago', value: currentParams.trafegoPago },
+      { name: 'Parcerias', value: currentParams.parceriasBares },
+      { name: 'Indique/Ganhe', value: currentParams.indiqueGanhe },
+    ];
+    const colors = ['#EAB308', '#64748b', '#22c55e', '#f97316', '#a78bfa', '#14b8a6'];
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+          <div className="text-[10px] uppercase text-slate-400 font-black mb-4">Distribuição de Verba</div>
+          <ResponsiveContainer width="100%" height={280}>
+            <PieChart>
+              <Pie data={data} dataKey="value" nameKey="name" innerRadius={70} outerRadius={100} paddingAngle={3}>
+                {data.map((_, i) => (
+                  <Cell key={i} fill={colors[i % colors.length]} />
+                ))}
+              </Pie>
+              <Tooltip contentStyle={{ backgroundColor: '#020617', border: 'none', fontSize: 10 }} />
+              <Legend wrapperStyle={{ fontSize: 10 }} verticalAlign="bottom" height={36} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+          <div className="text-[10px] uppercase text-slate-400 font-black mb-2">Custos Mensais</div>
+          <div className="grid grid-cols-2 gap-4 text-slate-200">
+            <div>
+              <div className="text-[10px] text-slate-400 uppercase font-bold">Fixos</div>
+              <div className="text-xl font-black">{formatCurrency(currentParams.fixedCosts)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-400 uppercase font-bold">Tecnologia</div>
+              <div className="text-xl font-black">{formatCurrency(currentParams.techMonthly)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-400 uppercase font-bold">Marketing</div>
+              <div className="text-xl font-black">{formatCurrency(currentParams.marketingMonthly)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-400 uppercase font-bold">Campanhas</div>
+              <div className="text-xl font-black">{formatCurrency(currentParams.adesaoTurbo + currentParams.trafegoPago + currentParams.parceriasBares + currentParams.indiqueGanhe)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDrivers = () => {
+    const rows = projections.slice(0, 12).map((r) => {
+      const target = Math.max(50, Math.round(r.users / 200));
+      const cov = r.users > 0 ? (r.drivers * 200) / r.users : 0;
+      const gap = r.drivers - target;
+      return { ...r, target, cov, gap };
+    });
+    return (
+      <div className="space-y-4">
+        <h3 className="text-sm font-black uppercase text-yellow-500">Gestão de Frota e Cobertura</h3>
+        <div className="overflow-x-auto bg-slate-900 border border-slate-800 rounded-xl">
+          <table className="w-full text-[12px] text-slate-200">
+            <thead className="bg-slate-800 text-[11px] uppercase text-slate-400">
+              <tr>
+                <th className="p-3 text-left">Mês</th>
+                <th className="p-3 text-center">Frota</th>
+                <th className="p-3 text-center">Alvo</th>
+                <th className="p-3 text-center">GAP</th>
+                <th className="p-3 text-right">Cobertura</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {rows.map((r) => (
+                <tr key={r.month}>
+                  <td className="p-3 font-bold">Mês {r.month}</td>
+                  <td className="p-3 text-center">{r.drivers}</td>
+                  <td className="p-3 text-center text-slate-400">{r.target}</td>
+                  <td className={`p-3 text-center font-black ${r.gap >= 0 ? 'text-green-400' : 'text-red-400'}`}>{r.gap > 0 ? `+${r.gap}` : r.gap}</td>
+                  <td className="p-3 text-right">{r.cov.toFixed(2)}x</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const renderProjecoes = () => (
+    <div className="space-y-6">
+      <h3 className="text-sm font-black uppercase text-yellow-500">Projeções de Volume</h3>
+      <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl h-[360px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={projections}>
+            <CartesianGrid stroke="#1e293b" vertical={false} />
+            <XAxis dataKey="month" stroke="#475569" fontSize={10} />
+            <YAxis yAxisId="left" stroke="#475569" fontSize={10} />
+            <YAxis yAxisId="right" orientation="right" stroke="#475569" fontSize={10} />
+            <Tooltip contentStyle={{ backgroundColor: '#020617', border: 'none', fontSize: 10 }} />
+            <Bar yAxisId="left" dataKey="rides" name="Corridas" fill="#EAB308" radius={[4, 4, 0, 0]} />
+            <Line yAxisId="right" type="monotone" dataKey="drivers" name="Frota" stroke="#64748b" strokeWidth={3} dot={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+
+  const renderKpis = () => {
+    const last = projections[projections.length - 1];
+    const ratio = (last?.ltv || 0) / ((last?.cac || 1));
+    return (
+      <div className="space-y-6">
+        <h3 className="text-sm font-black uppercase text-yellow-500">KPIs</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black">LTV</div>
+            <div className="text-2xl font-black text-green-400">{formatCurrency(last?.ltv)}</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black">CAC</div>
+            <div className="text-2xl font-black text-yellow-400">{formatCurrency(last?.cac)}</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black">LTV/CAC</div>
+            <div className="text-2xl font-black {ratio>=3?'text-green-400':'text-white'}">{ratio.toFixed(1)}x</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCenarios = () => {
+    const scenariosData = Object.values(ScenarioType).map((t) => {
+      const proj = calculateProjections(paramsMap[t], t as ScenarioType);
+      const last = proj[proj.length - 1];
+      const totalProfit = proj.reduce((a, b) => a + b.netProfit, 0);
+      const breakEvenIdx = proj.findIndex((r) => r.netProfit > 0);
+      const paybackIdx = proj.findIndex((r) => r.accumulatedProfit > 0);
+      return { type: t as ScenarioType, totalProfit, breakEvenIdx, paybackIdx, share: (last.users / FRANCA_STATS.digitalUsers) * 100 };
+    });
+    return (
+      <div className="space-y-6">
+        <h3 className="text-sm font-black uppercase text-yellow-500">Comparação de Cenários</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {scenariosData.map((s) => (
+            <div key={s.type} className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+              <div className="text-[10px] uppercase text-slate-400 font-black">{SCENARIO_LABEL[s.type]}</div>
+              <div className={`text-xl font-black ${s.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>Lucro 36m: {formatCurrency(s.totalProfit)}</div>
+              <div className="text-sm text-slate-300">Break-even: {s.breakEvenIdx !== -1 ? `Mês ${s.breakEvenIdx + 1}` : '—'}</div>
+              <div className="text-sm text-slate-300">Payback: {s.paybackIdx !== -1 ? `Mês ${s.paybackIdx + 1}` : '—'}</div>
+              <div className="text-sm text-slate-300">Share M36: {s.share.toFixed(1)}%</div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl h-[360px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={Array.from({ length: 36 }, (_, i) => ({
+                month: i + 1,
+                Realista: calculateProjections(paramsMap[ScenarioType.REALISTA], ScenarioType.REALISTA)[i].accumulatedProfit,
+                Pessimista: calculateProjections(paramsMap[ScenarioType.PESSIMISTA], ScenarioType.PESSIMISTA)[i].accumulatedProfit,
+                Otimista: calculateProjections(paramsMap[ScenarioType.OTIMISTA], ScenarioType.OTIMISTA)[i].accumulatedProfit,
+              }))}
+            >
+              <CartesianGrid stroke="#1e293b" vertical={false} />
+              <XAxis dataKey="month" stroke="#475569" fontSize={10} />
+              <YAxis stroke="#475569" fontSize={10} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+              <Tooltip contentStyle={{ backgroundColor: '#020617', border: 'none', fontSize: 10 }} />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <ReferenceLine y={0} stroke="#64748b" strokeDasharray="3 3" />
+              <Line type="monotone" dataKey="Realista" stroke="#22c55e" strokeWidth={3} dot={false} />
+              <Line type="monotone" dataKey="Pessimista" stroke="#f43f5e" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+              <Line type="monotone" dataKey="Otimista" stroke="#38bdf8" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  };
+
+  const renderVisao36m = () => {
+    const results = projections;
+    const breakEvenIndex = results.findIndex((r) => r.netProfit > 0);
+    const paybackIndex = results.findIndex((r) => r.accumulatedProfit > 0);
+    const totalRides36 = results.reduce((acc, curr) => acc + curr.rides, 0);
+    const totalGMV36 = results.reduce((acc, curr) => acc + curr.grossRevenue, 0);
+    const totalProfit36 = results.reduce((acc, curr) => acc + curr.netProfit, 0);
+    return (
+      <div className="space-y-6">
+        <h3 className="text-sm font-black uppercase text-yellow-500">Visão 36 meses</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black">Break-even</div>
+            <div className="text-2xl font-black text-white">{breakEvenIndex !== -1 ? `Mês ${results[breakEvenIndex].month}` : 'Não atingido'}</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black">Payback</div>
+            <div className="text-2xl font-black text-white">{paybackIndex !== -1 ? `Mês ${results[paybackIndex].month}` : '> 36m'}</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black">Lucro Acumulado</div>
+            <div className={`text-2xl font-black ${totalProfit36 >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(totalProfit36)}</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black">GMV Total</div>
+            <div className="text-xl font-black text-white">{formatCurrency(totalGMV36)}</div>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black">Corridas Totais</div>
+            <div className="text-xl font-black text-white">{formatNumber(totalRides36)}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderDre = () => (
     <div className="space-y-4">
       <h3 className="text-sm font-black uppercase text-yellow-500">DRE resumido (mensal)</h3>
@@ -215,15 +485,36 @@ const App: React.FC = () => {
             {renderMarket()}
           </div>
         );
+      case 1:
+        return renderBench();
+      case 2:
+        return renderMarketing();
       case 3:
         return renderParams();
+      case 4:
+        return renderDrivers();
+      case 5:
+        return renderProjecoes();
+      case 6:
+        return renderVisao36m();
       case 7:
         return renderDre();
+      case 8:
+        return renderKpis();
+      case 9:
+        return renderCenarios();
       case 10:
         return (
           <div className="space-y-6">
             {renderSummaryCards()}
             {renderAudits()}
+          </div>
+        );
+      case 11:
+        return (
+          <div className="space-y-6">
+            {renderAudits()}
+            {renderKpis()}
           </div>
         );
       default:
