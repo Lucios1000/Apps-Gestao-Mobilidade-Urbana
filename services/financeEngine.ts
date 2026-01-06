@@ -8,9 +8,11 @@ export const calculateProjections = (
 ): MonthlyResult[] => {
   const results: MonthlyResult[] = [];
   
-  const MAX_USERS_SCENARIO = FRANCA_STATS.somTarget; 
+  // Teto de usuários (curva S, teto especificado)
+  const MAX_USERS_SCENARIO = 27398;
   
-  let driverCap = 2000; 
+  // Capacidade máxima de frota por cenário (mantém variação por cenário)
+  let driverCap = 2000;
   if (scenario === ScenarioType.PESSIMISTA) driverCap = 800;
   if (scenario === ScenarioType.OTIMISTA) driverCap = 3000;
 
@@ -18,7 +20,12 @@ export const calculateProjections = (
   let currentUsers = params.activeDrivers > 0 ? params.activeDrivers * 50 : 100; 
   let accumulatedProfit = -params.initialInvestment;
 
-  const baseGrowthRate = params.userGrowth / 100;
+  // Crescimento em S por faixas de meses
+  const getStageGrowth = (monthNumber: number) => {
+    if (monthNumber <= 6) return 0.07; // meses 1-6: 7%
+    if (monthNumber <= 24) return 0.15; // meses 7-24: 15%
+    return 0.04; // meses 25-36: 4%
+  };
 
   for (let m = 0; m < 36; m++) {
     const year = 2026 + Math.floor(m / 12);
@@ -59,73 +66,67 @@ export const calculateProjections = (
     }
 
     const previousUsers = currentUsers;
-    const saturationFactor = 1 - (currentUsers / MAX_USERS_SCENARIO);
-    let effectiveGrowthRate = Math.max(0, baseGrowthRate * saturationFactor);
-    
-    currentUsers = currentUsers * (1 + effectiveGrowthRate);
-    if (currentUsers > MAX_USERS_SCENARIO) currentUsers = MAX_USERS_SCENARIO;
+    const stageGrowth = getStageGrowth(m + 1);
+    const saturationFactor = Math.max(0, 1 - (currentUsers / MAX_USERS_SCENARIO));
+    const effectiveGrowthRate = stageGrowth * saturationFactor;
+    currentUsers = Math.min(MAX_USERS_SCENARIO, currentUsers * (1 + effectiveGrowthRate));
     
     const newUsersNet = currentUsers - previousUsers;
     const userChurnRate = (params.churnRate || 2) / 100;
     const grossNewUsers = newUsersNet + (previousUsers * userChurnRate);
 
-    // Crescimento da Frota
+    // Frota: início e adição mensal (sem churn no modelo)
     currentDrivers += (params.driverAdditionMonthly || 0);
-    const driverChurnRate = 0.02; 
-    currentDrivers = currentDrivers * (1 - driverChurnRate);
     currentDrivers = Math.min(driverCap, currentDrivers);
 
     // Demanda de Usuários
-    const demandedRides = currentUsers * (params.ridesPerUserMonth || 4.2); 
-    
-    const availabilityFactor = 0.40;
+    // Demanda (com sazonalidade por mês)
+    let demandedRides = currentUsers * (params.ridesPerUserMonth || 4.2);
     const workingDays = 30;
-    const maxTripsPerOnlineDriverDay = 35; 
-    const supplyCapacity = currentDrivers * availabilityFactor * workingDays * maxTripsPerOnlineDriverDay; 
+    const efficiencyFactor = 0.85; // fator de eficiência
+    const maxTripsPerDriverDay = 20; // teto diário por motorista
+    const supplyCapacity = currentDrivers * efficiencyFactor * workingDays * maxTripsPerDriverDay;
+
+    // Sazonalidade: -15% Jan/Jul, +20% Dez
+    if (monthIndex === 0 || monthIndex === 6) { // Janeiro, Julho
+      demandedRides *= 0.85;
+    } else if (monthIndex === 11) { // Dezembro
+      demandedRides *= 1.20;
+    }
     
     const actualRides = Math.min(demandedRides, supplyCapacity);
     const ridesPM = currentDrivers > 0 ? actualRides / currentDrivers : 0;
 
-    // Regra de Meritocracia
-    let effectiveTakeRate = 12; 
-    if (ridesPM >= 600) effectiveTakeRate = 10;
-    else if (ridesPM >= 500) effectiveTakeRate = 11;
-    else if (ridesPM >= 400) effectiveTakeRate = 12;
-    else if (ridesPM >= 300) effectiveTakeRate = 13;
-    else effectiveTakeRate = 15;
-
+    // Receita: take rate nominal 15%, média ponderada efetiva 13,2% (meritocracia)
     const grossRevenue = actualRides * params.avgFare;
-    const takeRateGross = grossRevenue * 0.15; 
-    const takeRateRevenue = grossRevenue * (effectiveTakeRate / 100); 
-    const cashback = takeRateGross - takeRateRevenue; 
+    const takeRateGross = grossRevenue * 0.15; // nominal
+    const takeRateRevenue = grossRevenue * 0.132; // efetivo (13,2%)
+    const cashback = takeRateGross - takeRateRevenue; // devolução ao motorista
 
     // CONDIÇÃO: Se Volume de Corridas for 0, zerar impostos, taxas e marketing
     let taxes = 0;
     let variableCosts = 0;
     let totalMarketing = 0;
-    let campaignCosts = 0;
-    let apiCosts = 0;
+    const campaignCosts = 0; // não considerado no novo modelo
     let totalTech = 0;
 
-    if (actualRides > 0) {
-      taxes = takeRateRevenue * 0.112; 
-      const chargebackReserve = grossRevenue * (params.chargebackReserveRate / 100);
-      campaignCosts = params.adesaoTurbo + params.trafegoPago + params.parceriasBares + params.indiqueGanhe;
-      totalMarketing = params.marketingMonthly + (m < 12 ? campaignCosts : campaignCosts * 0.3);
-      apiCosts = actualRides * (params.apiMaintenanceRate || 0.3);
-      const bankFees = takeRateRevenue * ((params.bankFeeRate || 3.0) / 100);
-      variableCosts = bankFees + chargebackReserve; 
-      totalTech = params.techMonthly + apiCosts;
-    } else {
-      // Se volume é 0, tecnologia base (techMonthly) ainda pode existir? 
-      // O prompt diz: "se o Volume for 0... marketing devem ser zerados".
-      // E vincula Custos Fixos e Tecnologia ao interruptor.
-      // Se Volume é 0, mas interruptor está ON, mantemos os fixos? 
-      // Interpretando que volume 0 zera apenas os proporcionais e o marketing.
-      totalTech = params.techMonthly; // Custo fixo de tecnologia permanece se manutenção estiver ativa
-    }
+    // Impostos: 11,2% sobre Receita Bruta da TKX (takeRateGross)
+    taxes = takeRateGross * 0.112;
+
+    // Marketing (CAC): 3000 fixos + 1,50 por NOVO usuário adicionado
+    const newUsersAdded = Math.max(0, currentUsers - previousUsers);
+    totalMarketing = 3000 + (1.5 * newUsersAdded);
+
+    // Tecnologia/APIs: 0,15 por corrida
+    totalTech = actualRides * 0.15;
+
+    // Bancário/Gateway: 0,40 por corrida + 2% sobre GMV
+    const bankFees = (actualRides * 0.40) + (grossRevenue * 0.02);
+    variableCosts = bankFees;
     
-    const currentFixedCosts = params.fixedCosts;
+    // Fixos escalonados: R$8.000 (meses 1-6) e +50% a cada semestre
+    const semestersPassed = Math.floor(m / 6); // m=0..5 -> 0; m=6..11 -> 1; etc.
+    const currentFixedCosts = 8000 * Math.pow(1.5, semestersPassed);
     
     const ebitda = takeRateRevenue - taxes - variableCosts - currentFixedCosts - totalTech - totalMarketing;
     const netProfit = ebitda; 
@@ -135,7 +136,7 @@ export const calculateProjections = (
     const contributionMarginVal = takeRateRevenue - taxes - variableCosts;
     const avgMarginPerUser = currentUsers > 0 ? contributionMarginVal / currentUsers : 0;
     const ltv = userChurnRate > 0 ? avgMarginPerUser / userChurnRate : 0;
-    const cac = (grossNewUsers > 0 && actualRides > 0) ? totalMarketing / grossNewUsers : 0;
+    const cac = newUsersAdded > 0 ? totalMarketing / newUsersAdded : 0;
 
     results.push({
       month: m + 1,
