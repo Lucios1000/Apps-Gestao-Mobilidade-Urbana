@@ -23,21 +23,22 @@ export const INITIAL_PARAMS: SimulationParams = {
   avgFare: 18.5,
   takeRate: 15,          
   activeDrivers: 44, 
-  driverAdditionMonthly: 10, // Ajustado para atingir ~400 no M36
+  driverAdditionMonthly: 10,
   ridesPerUserMonth: 4.2, 
   initialRides: 14000, 
   fixedCosts: 6200,
-  userGrowth: 12,
-  initialInvestment: 45000,
+  userGrowth: 15,
+  initialInvestment: 0,
   marketingMonthly: 11000,
-  techMonthly: 4000,
+  techMonthly: 3000,
   cancellationRate: 3,
   driverGrowth: 5,
   
   // Campaigns
   adesaoTurbo: 3000,
   trafegoPago: 4000,
-  parceriasBares: 1500,
+  mktMensalOff: 2000,
+  parceriasBares: 6000,
   indiqueGanhe: 1500,
 
   // Operational
@@ -46,15 +47,17 @@ export const INITIAL_PARAMS: SimulationParams = {
   churnRate: 2,
   bankFeeRate: 3.0,
   isMaintenanceActive: true,
-  applyMinimumCosts: true, // Por padrão, aplicar custos mínimos (realista)
+  applyMinimumCosts: true,
+  custoComercialMkt: 8000,
+  minCostsEnabled: true,
   
   // Campanhas de Fidelidade TKX Dynamic Control
-  eliteDriversSemestral: 10000,  // R$ 10.000/semestre para 20 melhores motoristas
-  fidelidadePassageirosAnual: 5000,  // R$ 5.000/ano (Sorteio iPhone)
-  reservaOperacionalGMV: 1.0,  // 1% do Lucro Líquido para cashbacks e experiências
+  eliteDriversSemestral: 10000,
+  fidelidadePassageirosAnual: 5000,
+  reservaOperacionalGMV: 2.0,
   
   // Meritocracia (Mix de Motoristas)
-  takeRateEfetivo: 13.2,  // 13,2% = mix equilibrado (30% Full-Time, 40% Part-Time, 30% Esporádicos)
+  takeRateEfetivo: 13.2,
 };
 
 export const MONTH_NAMES = [

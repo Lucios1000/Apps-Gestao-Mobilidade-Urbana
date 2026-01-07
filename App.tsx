@@ -92,7 +92,7 @@ const PARAM_SLIDERS: Array<{
   { key: 'avgFare', label: 'Tarifa Média (R$)', paramKey: 'avgFare', min: 10, max: 50, step: 0.5 },
   { key: 'ridesPerUserMonth', label: 'Corridas por Usuário/mês', paramKey: 'ridesPerUserMonth', min: 1, max: 10, step: 0.1 },
   { key: 'userGrowth', label: 'Crescimento de Usuários (%)', paramKey: 'userGrowth', min: 0, max: 30, step: 1, unit: '%' },
-  { key: 'fixedCosts', label: 'Custos Fixos (R$)', paramKey: 'fixedCosts', min: 0, max: 20000, step: 100 },
+  { key: 'custoComercialMkt', label: 'Custo Comercial + MKT (R$)', paramKey: 'custoComercialMkt', min: 0, max: 50000, step: 100 },
 ];
 
 const MKT_SLIDERS: Array<{
@@ -102,10 +102,10 @@ const MKT_SLIDERS: Array<{
   max: number;
   step: number;
 }> = [
-  { label: 'Marketing Mensal (R$)', paramKey: 'marketingMonthly', min: 0, max: 50000, step: 500 },
+  { label: 'Marketing Mídia OFF Mensal (R$)', paramKey: 'mktMensalOff', min: 0, max: 10000, step: 100 },
   { label: 'Adesão Turbo (R$)', paramKey: 'adesaoTurbo', min: 0, max: 10000, step: 100 },
   { label: 'Tráfego Pago (R$)', paramKey: 'trafegoPago', min: 0, max: 10000, step: 100 },
-  { label: 'Parcerias Bares (R$)', paramKey: 'parceriasBares', min: 0, max: 10000, step: 100 },
+  { label: 'Parcerias Bares, Casas Noturnas, Influencers, Eventos(R$)', paramKey: 'parceriasBares', min: 0, max: 20000, step: 100 },
   { label: 'Indique/Ganhe (R$)', paramKey: 'indiqueGanhe', min: 0, max: 10000, step: 100 },
 ];
 
@@ -135,6 +135,7 @@ const App: React.FC = () => {
     updateCurrentParam,
     updateParam,
     resetParams,
+    toggleMinCosts,
     supplyBottleneck,
     oversupplyWarning,
     paramsMap,
@@ -650,6 +651,29 @@ const App: React.FC = () => {
               </div>
             ))}
           </div>
+        </div>
+        
+        {/* Botão Custos Mínimos */}
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-black uppercase text-amber-400">Custos Mínimos</h3>
+            <button
+              type="button"
+              onClick={toggleMinCosts}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                currentParams.minCostsEnabled
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-red-600 text-white hover:bg-red-700'
+              }`}
+            >
+              {currentParams.minCostsEnabled ? '✓ Ativo' : '✗ Desativado'}
+            </button>
+          </div>
+          {!currentParams.minCostsEnabled && (
+            <div className="bg-red-900 border border-red-500 p-3 rounded text-red-200 text-xs">
+              ⚠️ Alerta: Custos Mínimos estão desativados. Alguns custos fixos podem não ser aplicados.
+            </div>
+          )}
         </div>
         
         {/* TKX DYNAMIC CONTROL: Sliders de Fidelidade */}
@@ -1444,6 +1468,15 @@ const App: React.FC = () => {
 
   const renderDre = () => (
     <div className="space-y-3">
+      {!currentParams.minCostsEnabled && (
+        <div className="bg-red-900 border border-red-500 p-4 rounded text-red-200 flex items-center gap-3">
+          <span className="text-2xl">⚠️</span>
+          <div>
+            <strong>Alerta: Custos Mínimos Desativados</strong>
+            <p className="text-xs mt-1">Alguns custos fixos podem não ser aplicados ao DRE. Reative na aba Marketing para retomar valores padrão.</p>
+          </div>
+        </div>
+      )}
       <div className="flex gap-2">
         {[1, 2, 3].map((period) => (
           <button

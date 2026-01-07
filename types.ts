@@ -24,6 +24,7 @@ export interface SimulationParams {
   // Marketing Campaigns
   adesaoTurbo: number;
   trafegoPago: number;
+  mktMensalOff: number;
   parceriasBares: number;
   indiqueGanhe: number;
 
@@ -34,6 +35,8 @@ export interface SimulationParams {
   bankFeeRate: number; // Novo: Taxa bancária em %
   isMaintenanceActive: boolean; // Novo: Interruptor de custos de manutenção
   applyMinimumCosts: boolean; // Toggle para ativar/desativar custos mínimos fixos e marketing
+  custoComercialMkt: number;
+  minCostsEnabled: boolean;
   
   // Campanhas de Fidelidade TKX Dynamic Control
   eliteDriversSemestral: number;  // R$ 10.000 base semestral para 20 motoristas

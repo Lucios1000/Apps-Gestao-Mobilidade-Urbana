@@ -10,39 +10,74 @@ export const useViability = () => {
   const [dreYear, setDreYear] = useState<number | 'total'>('total');
 
   const DEFAULT_VALUES: Record<ScenarioType, SimulationParams> = {
-    [ScenarioType.REALISTA]: INITIAL_PARAMS, 
+    [ScenarioType.REALISTA]: {
+      ...INITIAL_PARAMS,
+      activeDrivers: 44,
+      driverAdditionMonthly: 10,
+      avgFare: 18.5,
+      userGrowth: 15,
+      initialInvestment: 0,
+      techMonthly: 3000,
+      adesaoTurbo: 3000,
+      trafegoPago: 4000,
+      mktMensalOff: 2000,
+      parceriasBares: 6000,
+      indiqueGanhe: 1500,
+      custoComercialMkt: 8000,
+      eliteDriversSemestral: 10000,
+      fidelidadePassageirosAnual: 5000,
+      reservaOperacionalGMV: 2.0,
+      minCostsEnabled: true
+    }, 
     [ScenarioType.PESSIMISTA]: { 
       ...INITIAL_PARAMS, 
-      activeDrivers: 30, avgFare: 16.0, userGrowth: 5, marketingMonthly: 5000,
-      initialInvestment: 80000 
+      activeDrivers: 30,
+      driverAdditionMonthly: 10,
+      avgFare: 17.5,
+      userGrowth: 12,
+      initialInvestment: 0,
+      techMonthly: 3000,
+      adesaoTurbo: 3000,
+      trafegoPago: 4000,
+      mktMensalOff: 1000,
+      parceriasBares: 3000,
+      indiqueGanhe: 1500,
+      custoComercialMkt: 8000,
+      eliteDriversSemestral: 10000,
+      fidelidadePassageirosAnual: 5000,
+      reservaOperacionalGMV: 1.0,
+      minCostsEnabled: true
     }, 
     [ScenarioType.OTIMISTA]: { 
       ...INITIAL_PARAMS, 
-      activeDrivers: 150, avgFare: 22.0, userGrowth: 25, marketingMonthly: 20000,
-      initialInvestment: 35000 
+      activeDrivers: 80,
+      driverAdditionMonthly: 13,
+      avgFare: 18.5,
+      userGrowth: 18,
+      initialInvestment: 0,
+      techMonthly: 3000,
+      adesaoTurbo: 3000,
+      trafegoPago: 4000,
+      mktMensalOff: 4000,
+      parceriasBares: 10000,
+      indiqueGanhe: 1500,
+      custoComercialMkt: 8000,
+      eliteDriversSemestral: 10000,
+      fidelidadePassageirosAnual: 5000,
+      reservaOperacionalGMV: 3.0,
+      minCostsEnabled: true
     } 
   };
 
-  const [paramsMap, setParamsMap] = useState<Record<ScenarioType, SimulationParams>>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Garante que todas as chaves de cenário existam, mesmo se o salvo for antigo ou parcial
-        return { ...DEFAULT_VALUES, ...parsed };
-      } catch (e) {
-        console.error("Erro ao carregar parâmetros salvos:", e);
-      }
-    }
-    return DEFAULT_VALUES;
-  });
+  const [paramsMap, setParamsMap] = useState<Record<ScenarioType, SimulationParams>>(DEFAULT_VALUES);
 
   // Salva automaticamente no LocalStorage sempre que os parâmetros mudarem
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(paramsMap));
   }, [paramsMap]);
 
-  const currentParams = paramsMap[scenario];
+  // currentParams REATIVO - recalcula quando scenario ou paramsMap mudam
+  const currentParams = useMemo(() => paramsMap[scenario], [paramsMap, scenario]);
 
   // Recalcula as projeções apenas quando os parâmetros mudam (Performance!)
   // Adaptação: Passamos o scenario também, pois o engine precisa dele para definir tetos de frota
@@ -77,7 +112,17 @@ export const useViability = () => {
     updateParam(scenario, key, value);
   };
 
-  const resetParams = () => setParamsMap(DEFAULT_VALUES);
+  const resetParams = () => {
+    // Reset apenas o cenário atual (não todos os cenários)
+    setParamsMap(prev => ({
+      ...prev,
+      [scenario]: { ...DEFAULT_VALUES[scenario], minCostsEnabled: true }
+    }));
+  };
+
+  const toggleMinCosts = () => {
+    updateCurrentParam('minCostsEnabled', !currentParams.minCostsEnabled);
+  };
 
   return {
     activeTab,
@@ -96,6 +141,7 @@ export const useViability = () => {
     updateParam,         // Atualiza qualquer cenário
     updateCurrentParam,  // Atualiza cenário atual
     resetParams,
+    toggleMinCosts,
     lastResult,
     totalMarketingInvest,
     calculateProjections // Exposto para recalcular outros cenários na aba 9 se necessário
