@@ -26,8 +26,8 @@ jobs:
 
       - name: Start preview server
         run: |
-          nohup npx vite preview --host 127.0.0.1 --port 4173 > preview.log 2>&1 &
-          npx --yes wait-on@7 http://127.0.0.1:4173
+          nohup npm run preview -- --host 127.0.0.1 --port 4174 > preview.log 2>&1 &
+          npx --yes wait-on@7 http://127.0.0.1:4174/Lucios1000-novos-apps/
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
