@@ -1,0 +1,50 @@
+name: Release Snapshot
+
+on:
+  push:
+    tags:
+      - 'snapshot-*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Create snapshot zips
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_NAME="${GITHUB_REF##*/}"
+          mkdir -p backups
+          # Zip production build
+          (cd dist && zip -r "../backups/dist-${TAG_NAME}.zip" .)
+          # Zip source at HEAD
+          git archive --format=zip -o "backups/source-${TAG_NAME}.zip" HEAD
+          ls -lh backups
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            backups/dist-*.zip
+            backups/source-*.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
