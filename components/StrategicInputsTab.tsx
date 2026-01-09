@@ -29,12 +29,18 @@ const NumberDisplay: React.FC<{ value?: number }> = ({ value }) => (
   <span className="font-mono text-sm font-semibold text-slate-100">{formatNumber(value)}</span>
 );
 
+const formatCurrency = (value?: number) =>
+  typeof value === 'number'
+    ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : '—';
+
 const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCurrentParam }) => {
   const [states, setStates] = useState<IbgeState[]>([]);
   const [cities, setCities] = useState<IbgeCity[]>([]);
   const [selectedUfId, setSelectedUfId] = useState<number | null>(null);
   const [loadingCities, setLoadingCities] = useState(false);
   const [loadingPopulation, setLoadingPopulation] = useState(false);
+  const [populationYear, setPopulationYear] = useState<number | null>(null);
   const [samPercentInput, setSamPercentInput] = useState<number>(50);
 
   // Carrega estados (UF)
@@ -76,6 +82,22 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
     // Busca população estimada (TAM)
     setLoadingPopulation(true);
     try {
+      // Tenta cache local primeiro
+      try {
+        const cacheStr = localStorage.getItem('tkx_ibge_population_cache');
+        if (cacheStr) {
+          const cache = JSON.parse(cacheStr) as Record<string, { value: number; year: number; at: number }>;
+          const entry = cache[String(cityId)];
+          if (entry && entry.value > 0) {
+            updateCurrentParam('cityPopulation', entry.value);
+            const samCalcCached = Math.round(entry.value * (samPercentInput / 100));
+            updateCurrentParam('samPopulation', samCalcCached);
+            setPopulationYear(entry.year || null);
+            return;
+          }
+        }
+      } catch {}
+
       // Tabela 6579 (Estimativas de População) • Variável 9324 (População estimada)
       // Primeiro tenta 2024; se não houver, cai para 2022 (Censo mais recente)
       const fetchYear = async (year: number) => {
@@ -91,13 +113,25 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
         return Number(valueStr) || 0;
       };
 
+      let usedYear: number | null = null;
       let population = await fetchYear(2024);
-      if (!population || population <= 0) {
+      if (population && population > 0) {
+        usedYear = 2024;
+      } else {
         population = await fetchYear(2022);
+        if (population && population > 0) usedYear = 2022;
       }
       updateCurrentParam('cityPopulation', population);
       const samCalc = Math.round(population * (samPercentInput / 100));
       updateCurrentParam('samPopulation', samCalc);
+      setPopulationYear(usedYear);
+      // Grava cache local
+      try {
+        const cacheStr = localStorage.getItem('tkx_ibge_population_cache');
+        const cache = cacheStr ? (JSON.parse(cacheStr) as Record<string, { value: number; year: number; at: number }>) : {};
+        cache[String(cityId)] = { value: population, year: usedYear || 0, at: Date.now() };
+        localStorage.setItem('tkx_ibge_population_cache', JSON.stringify(cache));
+      } catch {}
     } catch (e) {
       console.warn('Falha ao carregar população IBGE:', e);
     } finally {
@@ -120,6 +154,28 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
     const mkt = currentParams.marketShareTarget || 0;
     return Math.round(sam * (mkt / 100));
   }, [currentParams.samPopulation, currentParams.marketShareTarget]);
+
+  // — Simulador Técnico (independente dos sliders) —
+  const [minFareActive, setMinFareActive] = useState<number>(1.0); // Tarifa mínima por faixa (R$)
+  const [baseRatePerKm, setBaseRatePerKm] = useState<number>(1.5); // Tarifa Base (R$/km)
+  const [valuePerKm, setValuePerKm] = useState<number>(1.2); // Valor por KM (R$/km)
+  const [valuePerMinute, setValuePerMinute] = useState<number>(0.3); // Valor por Min (R$/min)
+  const [simKm, setSimKm] = useState<number>(5);
+  const [simMinutes, setSimMinutes] = useState<number>(12);
+  const [dynamicPct, setDynamicPct] = useState<number>(0);
+
+  const technicalTicket = useMemo(() => {
+    const sum = (minFareActive || 0)
+      + (baseRatePerKm || 0) * (simKm || 0)
+      + (valuePerKm || 0) * (simKm || 0)
+      + (valuePerMinute || 0) * (simMinutes || 0);
+    const factor = 1 + ((dynamicPct || 0) / 100);
+    return Math.max(0, sum * factor);
+  }, [minFareActive, baseRatePerKm, valuePerKm, valuePerMinute, simKm, simMinutes, dynamicPct]);
+
+  const sliderTicket = currentParams.avgFare || 0; // Valor atual do slider (tarifa média)
+  const diffRS = technicalTicket - sliderTicket;
+  const diffPct = sliderTicket > 0 ? (diffRS / sliderTicket) * 100 : 0;
 
   return (
     <div className="space-y-6">
@@ -166,7 +222,12 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
           <div>
             <div className="flex items-center justify-between mb-1">
               <div className="text-[10px] uppercase text-slate-400 font-black">População (TAM)</div>
-              {loadingPopulation && <span className="text-[10px] text-slate-500">Consultando IBGE…</span>}
+              <div className="flex items-center gap-2">
+                {populationYear === 2022 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-400/30" data-testid="ibge-census-badge">Censo 2022</span>
+                )}
+                {loadingPopulation && <span className="text-[10px] text-slate-500">Consultando IBGE…</span>}
+              </div>
             </div>
             <input
               type="number"
@@ -240,6 +301,110 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
         <div className="card-gradient bg-gradient-to-br from-slate-800/50 to-slate-900/30 border border-slate-700/40 p-4 rounded-xl">
           <div className="text-[8px] uppercase text-slate-500 font-bold tracking-[0.08em] mb-2">Cenário</div>
           <div className="text-sm font-black text-white">{scenario}</div>
+        </div>
+      </div>
+
+      {/* Simulador Técnico (oculto por padrão) */}
+      <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-[10px] uppercase text-slate-400 font-black">Simulador Técnico (independente dos sliders)</h4>
+          <span className="text-[10px] text-slate-500">Uso interno: conferência de ticket</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <div className="text-[10px] uppercase text-slate-400 font-bold">Tarifa Mínima (R$)</div>
+            <select
+              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
+              value={minFareActive}
+              onChange={(e) => setMinFareActive(Number(e.target.value))}
+              data-testid="sim-min-fare"
+            >
+              {[1.0, 1.1, 1.2, 1.3].map(v => (
+                <option key={v} value={v}>{formatCurrency(v)}</option>
+              ))}
+            </select>
+
+            <div className="text-[10px] uppercase text-slate-400 font-bold mt-3">Tarifa Base (R$/km)</div>
+            <input
+              type="number"
+              step={0.1}
+              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
+              value={baseRatePerKm}
+              onChange={(e) => setBaseRatePerKm(Number(e.target.value))}
+              data-testid="sim-base-per-km"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-[10px] uppercase text-slate-400 font-bold">Valor por KM (R$/km)</div>
+            <input
+              type="number"
+              step={0.1}
+              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
+              value={valuePerKm}
+              onChange={(e) => setValuePerKm(Number(e.target.value))}
+              data-testid="sim-val-per-km"
+            />
+            <div className="text-[10px] uppercase text-slate-400 font-bold mt-3">Valor por Minuto (R$/min)</div>
+            <input
+              type="number"
+              step={0.05}
+              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
+              value={valuePerMinute}
+              onChange={(e) => setValuePerMinute(Number(e.target.value))}
+              data-testid="sim-val-per-min"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-[10px] uppercase text-slate-400 font-bold">Simulador de KM (distância)</div>
+            <input
+              type="number"
+              step={0.1}
+              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
+              value={simKm}
+              onChange={(e) => setSimKm(Number(e.target.value))}
+              data-testid="sim-km"
+            />
+            <div className="text-[10px] uppercase text-slate-400 font-bold mt-3">Simulador de Minutos (tempo)</div>
+            <input
+              type="number"
+              step={1}
+              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
+              value={simMinutes}
+              onChange={(e) => setSimMinutes(Number(e.target.value))}
+              data-testid="sim-minutes"
+            />
+            <div className="text-[10px] uppercase text-slate-400 font-bold mt-3">% Dinâmica</div>
+            <input
+              type="number"
+              step={1}
+              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
+              value={dynamicPct}
+              onChange={(e) => setDynamicPct(Number(e.target.value))}
+              placeholder="Ex.: 25 (para 25%)"
+              data-testid="sim-dynamic-pct"
+            />
+          </div>
+        </div>
+
+        {/* Resultado e comparador */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="bg-slate-800/40 border border-slate-700/40 p-3 rounded-lg">
+            <div className="text-[10px] uppercase text-slate-400 font-bold mb-1">Ticket Técnico Calculado</div>
+            <div className="text-2xl font-black text-gradient-gold" data-testid="sim-technical-ticket">{formatCurrency(technicalTicket)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">(Min + Base×KM + R$/KM×KM + R$/Min×Min) × Dinâmica</div>
+          </div>
+          <div className="bg-slate-800/40 border border-slate-700/40 p-3 rounded-lg">
+            <div className="text-[10px] uppercase text-slate-400 font-bold mb-1">Valor Atual do Slider</div>
+            <div className="text-2xl font-black text-slate-100" data-testid="sim-slider-ticket">{formatCurrency(sliderTicket)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">Parametro atual: Tarifa Média</div>
+          </div>
+          <div className="bg-slate-800/40 border border-slate-700/40 p-3 rounded-lg">
+            <div className="text-[10px] uppercase text-slate-400 font-bold mb-1">Variação</div>
+            <div className={`text-xl font-black ${diffRS >= 0 ? 'text-green-400' : 'text-red-400'}`} data-testid="sim-diff-rs">{formatCurrency(diffRS)}</div>
+            <div className={`text-sm font-bold ${diffPct >= 0 ? 'text-green-400' : 'text-red-400'}`} data-testid="sim-diff-pct">{diffPct.toFixed(1)}%</div>
+          </div>
         </div>
       </div>
     </div>

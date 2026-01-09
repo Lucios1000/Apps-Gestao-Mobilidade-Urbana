@@ -14,6 +14,9 @@
 - Instalação PWA: abra a demo no Chrome/Edge → “Instalar app”
  - Releases: https://github.com/Lucios1000/Lucios1000-novos-apps/releases
 
+Snapshots
+- Último snapshot (Pré-mudanças — Campanhas): https://github.com/Lucios1000/Lucios1000-novos-apps/releases/tag/snapshot-pre-refactor-campanhas-20260108-1902
+
 Nota: PRs em `feat/*` com label `automerge` têm auto-merge (squash) habilitado quando os checks obrigatórios passam.
 
 # Run and deploy your AI Studio app

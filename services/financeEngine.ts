@@ -8,8 +8,16 @@ export const calculateProjections = (
 ): MonthlyResult[] => {
   const results: MonthlyResult[] = [];
   
-  // Teto de usuários (curva S, teto especificado)
-  const MAX_USERS_SCENARIO = 27398;
+  // Teto de usuários (SOM) derivado de SAM × Market Share Alvo
+  const samBase = typeof params.samPopulation === 'number' && params.samPopulation > 0
+    ? params.samPopulation
+    : Math.round((params.cityPopulation || FRANCA_STATS.population) * 0.5);
+  const marketTargetPct = typeof params.marketShareTarget === 'number' && params.marketShareTarget > 0
+    ? params.marketShareTarget
+    : 15; // fallback
+  const SOM_CAP = Math.max(0, Math.round(samBase * (marketTargetPct / 100)));
+  // Fallback para valor anterior caso cálculo resulte em 0
+  const MAX_USERS_SCENARIO = SOM_CAP > 0 ? SOM_CAP : 27398;
   
   // Capacidade máxima de frota por cenário (mantém variação por cenário)
   let driverCap = 2000;

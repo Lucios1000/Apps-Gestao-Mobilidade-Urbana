@@ -144,6 +144,27 @@ const App: React.FC = () => {
     calculateProjections,
   } = useViability();
 
+  // Navegação por hash: permite abrir uma aba direta via #tab=ID
+  useEffect(() => {
+    try {
+      const hash = window.location.hash || '';
+      const params = new URLSearchParams(hash.startsWith('#') ? hash.substring(1) : hash);
+      const tabStr = params.get('tab');
+      const tabNum = tabStr ? Number(tabStr) : NaN;
+      if (!isNaN(tabNum)) setActiveTab(tabNum);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.hash.startsWith('#') ? window.location.hash.substring(1) : '');
+      params.set('tab', String(activeTab));
+      const newHash = `#${params.toString()}`;
+      if (window.location.hash !== newHash) window.location.hash = newHash;
+    } catch {}
+  }, [activeTab]);
+
   const {
     snapshots,
     saveSnapshot,
