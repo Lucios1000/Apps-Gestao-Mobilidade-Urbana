@@ -156,22 +156,23 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
   }, [currentParams.samPopulation, currentParams.marketShareTarget]);
 
   // — Simulador Técnico (independente dos sliders) —
-  const [minFareActive, setMinFareActive] = useState<number>(1.0); // Tarifa mínima por faixa (R$)
-  const [baseRatePerKm, setBaseRatePerKm] = useState<number>(1.5); // Tarifa Base (R$/km)
-  const [valuePerKm, setValuePerKm] = useState<number>(1.2); // Valor por KM (R$/km)
-  const [valuePerMinute, setValuePerMinute] = useState<number>(0.3); // Valor por Min (R$/min)
-  const [simKm, setSimKm] = useState<number>(5);
-  const [simMinutes, setSimMinutes] = useState<number>(12);
+  // Parâmetros fixos definidos pela regra
+  const BASE_FARE = 11.5; // Tarifa Base fixa (R$)
+  const KM_RATE = 2.0;    // Valor por KM fixo (R$/km)
+
+  const [minFare, setMinFare] = useState<number>(1.0); // Tarifa Mínima (R$)
+  const [hourMultiplier, setHourMultiplier] = useState<number>(1.0); // Multiplicador Horário (1.0 a 1.3)
+  const [simKm, setSimKm] = useState<number>(3);
+  const [simMinutes, setSimMinutes] = useState<number>(10); // Informativo (sem efeito financeiro)
   const [dynamicPct, setDynamicPct] = useState<number>(0);
 
   const technicalTicket = useMemo(() => {
-    const sum = (minFareActive || 0)
-      + (baseRatePerKm || 0) * (simKm || 0)
-      + (valuePerKm || 0) * (simKm || 0)
-      + (valuePerMinute || 0) * (simMinutes || 0);
+    const baseFormula = (minFare || 0) * (hourMultiplier || 1)
+      + BASE_FARE
+      + (KM_RATE * (simKm || 0));
     const factor = 1 + ((dynamicPct || 0) / 100);
-    return Math.max(0, sum * factor);
-  }, [minFareActive, baseRatePerKm, valuePerKm, valuePerMinute, simKm, simMinutes, dynamicPct]);
+    return Math.max(0, baseFormula * factor);
+  }, [minFare, hourMultiplier, simKm, dynamicPct]);
 
   const sliderTicket = currentParams.avgFare || 0; // Valor atual do slider (tarifa média)
   const diffRS = technicalTicket - sliderTicket;
@@ -317,42 +318,33 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
               type="number"
               step={0.1}
               className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
-              value={minFareActive}
-              onChange={(e) => setMinFareActive(Number(e.target.value))}
-              placeholder="Ex.: 1.0"
+              value={minFare}
+              onChange={(e) => setMinFare(Number(e.target.value))}
               data-testid="sim-min-fare"
             />
 
-            <div className="text-[10px] uppercase text-slate-400 font-bold mt-3">Tarifa Base (R$/km)</div>
-            <input
-              type="number"
-              step={0.1}
+            <div className="text-[10px] uppercase text-slate-400 font-bold mt-3">Multiplicador Horário</div>
+            <select
               className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
-              value={baseRatePerKm}
-              onChange={(e) => setBaseRatePerKm(Number(e.target.value))}
-              data-testid="sim-base-per-km"
-            />
+              value={hourMultiplier}
+              onChange={(e) => setHourMultiplier(Number(e.target.value))}
+              data-testid="sim-hour-multiplier"
+            >
+              {[1.0, 1.1, 1.2, 1.3].map(v => (
+                <option key={v} value={v}>{v.toFixed(1)}x</option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-2">
-            <div className="text-[10px] uppercase text-slate-400 font-bold">Valor por KM (R$/km)</div>
-            <input
-              type="number"
-              step={0.1}
-              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
-              value={valuePerKm}
-              onChange={(e) => setValuePerKm(Number(e.target.value))}
-              data-testid="sim-val-per-km"
-            />
-            <div className="text-[10px] uppercase text-slate-400 font-bold mt-3">Valor por Minuto (R$/min)</div>
-            <input
-              type="number"
-              step={0.05}
-              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm"
-              value={valuePerMinute}
-              onChange={(e) => setValuePerMinute(Number(e.target.value))}
-              data-testid="sim-val-per-min"
-            />
+            <div className="text-[10px] uppercase text-slate-400 font-bold">Tarifa Base (fixa)</div>
+            <div className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200" aria-readonly>
+              {formatCurrency(BASE_FARE)}
+            </div>
+            <div className="text-[10px] uppercase text-slate-400 font-bold mt-3">Valor por KM (fixo)</div>
+            <div className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200" aria-readonly>
+              {formatCurrency(KM_RATE)} / km
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -374,6 +366,7 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
               onChange={(e) => setSimMinutes(Number(e.target.value))}
               data-testid="sim-minutes"
             />
+            <div className="text-[10px] text-slate-500">Informativo (sem impacto financeiro)</div>
             <div className="text-[10px] uppercase text-slate-400 font-bold mt-3">% Dinâmica</div>
             <input
               type="number"
@@ -392,7 +385,7 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
           <div className="bg-slate-800/40 border border-slate-700/40 p-3 rounded-lg">
             <div className="text-[10px] uppercase text-slate-400 font-bold mb-1">Ticket Técnico Calculado</div>
             <div className="text-2xl font-black text-gradient-gold" data-testid="sim-technical-ticket">{formatCurrency(technicalTicket)}</div>
-            <div className="text-[11px] text-slate-500 mt-1">(Min + Base×KM + R$/KM×KM + R$/Min×Min) × Dinâmica</div>
+            <div className="text-[11px] text-slate-500 mt-1">[(Tarifa Mínima × Mult.) + Tarifa Base + (R$/KM × KM)] × Dinâmica</div>
           </div>
           <div className="bg-slate-800/40 border border-slate-700/40 p-3 rounded-lg">
             <div className="text-[10px] uppercase text-slate-400 font-bold mb-1">Valor Atual do Slider</div>
@@ -404,6 +397,41 @@ const StrategicInputsTab: React.FC<Props> = ({ scenario, currentParams, updateCu
             <div className={`text-xl font-black ${diffRS >= 0 ? 'text-green-400' : 'text-red-400'}`} data-testid="sim-diff-rs">{formatCurrency(diffRS)}</div>
             <div className={`text-sm font-bold ${diffPct >= 0 ? 'text-green-400' : 'text-red-400'}`} data-testid="sim-diff-pct">{diffPct.toFixed(1)}%</div>
           </div>
+        </div>
+
+        {/* DRE por corrida baseado no Slider */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="bg-slate-800/40 border border-slate-700/40 p-3 rounded-lg">
+            <div className="text-[10px] uppercase text-slate-400 font-bold mb-1">Receita Bruta</div>
+            <div className="text-xl font-black text-slate-100">{formatCurrency(sliderTicket)}</div>
+            <div className="text-[11px] text-slate-500">Valor total (Slider)</div>
+          </div>
+          {(() => {
+            const gateway = sliderTicket * 0.025;
+            const seguro = 0.60;
+            const manutencao = 0.40;
+            const provisao = 0.35;
+            const takeRate = sliderTicket * 0.15;
+            const margemOperacional = sliderTicket - gateway - seguro - manutencao - provisao;
+            const repasseFinal = margemOperacional - takeRate;
+            return (
+              <>
+                <div className="bg-slate-800/40 border border-slate-700/40 p-3 rounded-lg">
+                  <div className="text-[10px] uppercase text-slate-400 font-bold mb-2">Descontos</div>
+                  <div className="text-[12px] text-slate-300 flex justify-between"><span>Gateway (2,5%)</span><span>{formatCurrency(gateway)}</span></div>
+                  <div className="text-[12px] text-slate-300 flex justify-between"><span>Seguro APP</span><span>{formatCurrency(seguro)}</span></div>
+                  <div className="text-[12px] text-slate-300 flex justify-between"><span>Manutenção</span><span>{formatCurrency(manutencao)}</span></div>
+                  <div className="text-[12px] text-slate-300 flex justify-between"><span>Provisão Legal</span><span>{formatCurrency(provisao)}</span></div>
+                  <div className="text-[12px] text-slate-500 mt-2 flex justify-between"><span>Margem Operacional</span><span>{formatCurrency(margemOperacional)}</span></div>
+                </div>
+                <div className="bg-slate-800/40 border border-slate-700/40 p-3 rounded-lg">
+                  <div className="text-[10px] uppercase text-slate-400 font-bold mb-2">Repasse</div>
+                  <div className="text-[12px] text-slate-300 flex justify-between"><span>Comissão App (15%)</span><span>{formatCurrency(takeRate)}</span></div>
+                  <div className="text-[12px] text-slate-200 mt-2 flex justify-between"><span>Líquido do Motorista</span><span className="font-black">{formatCurrency(repasseFinal)}</span></div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
