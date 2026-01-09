@@ -5,6 +5,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(async ({ mode }) => {
     const env = loadEnv(mode, '.', '');
+    const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+    const basePath = isVercel ? '/' : (mode === 'production' ? '/Lucios1000-novos-apps/' : '/');
     const plugins: any[] = [react()];
     try {
       const { VitePWA } = await import('vite-plugin-pwa');
@@ -16,8 +18,8 @@ export default defineConfig(async ({ mode }) => {
           manifest: {
             name: 'TKX Franca — Viabilidade Financeira',
             short_name: 'TKX Franca',
-            start_url: '/Lucios1000-novos-apps/',
-            scope: '/Lucios1000-novos-apps/',
+            start_url: basePath,
+            scope: basePath,
             display: 'standalone',
             theme_color: '#0f172a',
             background_color: '#0b1220',
@@ -33,8 +35,8 @@ export default defineConfig(async ({ mode }) => {
       );
     } catch {}
     return {
-      // Usa base relativa ao repositório para GitHub Pages (projeto: /Lucios1000-novos-apps/)
-      base: mode === 'production' ? '/Lucios1000-novos-apps/' : '/',
+      // Base dinâmica: '/' em Vercel; '/Lucios1000-novos-apps/' em produção GitHub Pages
+      base: basePath,
       server: {
         port: 3000,
         host: '0.0.0.0',
