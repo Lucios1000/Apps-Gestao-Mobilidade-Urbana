@@ -6,8 +6,8 @@ export default defineConfig({
   expect: { timeout: 5000 },
   fullyParallel: false,
   webServer: {
-    command: 'npm run preview',
-    url: 'http://localhost:4174/Lucios1000-novos-apps/',
+    command: 'npm run preview -- --host 127.0.0.1 --port 4174',
+    url: 'http://127.0.0.1:4174/Lucios1000-novos-apps/',
     reuseExistingServer: true,
     timeout: 120000
   },
@@ -15,7 +15,7 @@ export default defineConfig({
     headless: true,
     viewport: { width: 1280, height: 720 },
     actionTimeout: 10 * 1000,
-    baseURL: 'http://localhost:4174/Lucios1000-novos-apps/'
+    baseURL: 'http://127.0.0.1:4174/Lucios1000-novos-apps/'
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } }
