@@ -2799,8 +2799,11 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
     );
   };
 
-  const renderDre = () => (
-    <div className="space-y-3">
+  const renderDre = () => {
+    const breakEvenMonth = displayProjections.find(r => r.netProfit > 0)?.month;
+
+    return (
+      <div className="space-y-3">
       {!currentParams.minCostsEnabled && (
         <div className="bg-red-900 border border-red-500 p-4 rounded text-red-200 flex items-center gap-3">
           <span className="text-2xl">⚠️</span>
@@ -2831,22 +2834,30 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
         <h3 className="text-xs font-black uppercase text-yellow-400 tracking-[0.08em] mb-4">Evolução de Custos (Fixos vs Variáveis)</h3>
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart
+            <ComposedChart
               data={displayProjections.slice((yearPeriod - 1) * 12, yearPeriod * 12).map(r => ({
                 month: r.month,
                 fixed: r.fixedCosts + r.totalMarketing + r.eliteDriversCost + r.fidelidadePassageirosCost,
-                variable: r.taxes + r.variableCosts + r.totalTech + r.cashback
+                variable: r.taxes + r.variableCosts + r.totalTech + r.cashback,
+                revenue: r.takeRateRevenue,
+                margin: r.margin
               }))}
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
               <XAxis dataKey="month" stroke="#475569" fontSize={10} tickFormatter={(v) => `M${v}`} />
-              <YAxis stroke="#475569" fontSize={10} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
-              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f1f5f9' }} formatter={(value: number) => formatCurrency(value)} />
+              <YAxis yAxisId="left" stroke="#475569" fontSize={10} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
+              <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" fontSize={10} tickFormatter={(v) => `${v.toFixed(0)}%`} />
+              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f1f5f9' }} formatter={(value: number, name: string) => [name.includes('Margem') ? `${value.toFixed(1)}%` : formatCurrency(value), name]} />
               <Legend content={<NeutralLegend />} />
-              <Bar dataKey="fixed" name="Custos Fixos + MKT" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
-              <Bar dataKey="variable" name="Custos Variáveis" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <Bar yAxisId="left" dataKey="fixed" name="Custos Fixos + MKT" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
+              <Bar yAxisId="left" dataKey="variable" name="Custos Variáveis" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Line yAxisId="left" type="monotone" dataKey="revenue" name="Receita (Break-even)" stroke="#10b981" strokeWidth={3} dot={{ r: 3, fill: '#10b981', stroke: '#064e3b', strokeWidth: 1 }} />
+              <Line yAxisId="right" type="monotone" dataKey="margin" name="Margem Líquida (%)" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+              {breakEvenMonth && breakEvenMonth > (yearPeriod - 1) * 12 && breakEvenMonth <= yearPeriod * 12 && (
+                <ReferenceLine yAxisId="left" x={breakEvenMonth} stroke="#eab308" strokeDasharray="3 3" label={{ value: '★ Break-even', position: 'top', fill: '#eab308', fontSize: 10, fontWeight: 'bold' }} />
+              )}
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -2954,7 +2965,8 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderAudits = () => (
     <div className="space-y-3">
