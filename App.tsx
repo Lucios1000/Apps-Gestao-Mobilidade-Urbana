@@ -99,13 +99,10 @@ const PARAM_SLIDERS: Array<{
   step: number;
   unit?: string;
 }> = [
-  { key: 'initialInvestment', label: 'Investimento Inicial (R$)', paramKey: 'initialInvestment', min: 0, max: 200000, step: 1000 },
   { key: 'activeDrivers', label: 'Frota Inicial', paramKey: 'activeDrivers', min: 0, max: 500, step: 1, unit: ' condutores' },
   { key: 'driverAdditionMonthly', label: 'Adição Mensal de Frota', paramKey: 'driverAdditionMonthly', min: 0, max: 100, step: 1, unit: ' condutores' },
-  { key: 'avgFare', label: 'Tarifa Média (R$)', paramKey: 'avgFare', min: 0, max: 50, step: 0.5 },
   { key: 'ridesPerUserMonth', label: 'Corridas por Usuário/mês', paramKey: 'ridesPerUserMonth', min: 0, max: 10, step: 0.1 },
   { key: 'userGrowth', label: 'Crescimento de Usuários (%)', paramKey: 'userGrowth', min: 0, max: 30, step: 1, unit: '%' },
-  { key: 'custoComercialMkt', label: 'Custo Comercial + MKT (R$)', paramKey: 'custoComercialMkt', min: 0, max: 50000, step: 100 },
 ];
 
 const MKT_SLIDERS: Array<{
@@ -115,6 +112,9 @@ const MKT_SLIDERS: Array<{
   max: number;
   step: number;
 }> = [
+  { label: 'Investimento Inicial (R$)', paramKey: 'initialInvestment', min: 0, max: 200000, step: 1000 },
+  { label: 'Tarifa Média (R$)', paramKey: 'avgFare', min: 0, max: 50, step: 0.5 },
+  { label: 'Custo Comercial + MKT (R$)', paramKey: 'custoComercialMkt', min: 0, max: 50000, step: 100 },
   { label: 'Despesas Básicas', paramKey: 'fixedCosts', min: 0, max: 50000, step: 100 },
   { label: 'Marketing (R$)', paramKey: 'marketingMonthly', min: 0, max: 50000, step: 100 },
   { label: 'Taxa de Tecnologia (% do GMV)', paramKey: 'techFeePct', min: 0, max: 10, step: 0.1 },
@@ -520,7 +520,7 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
       const takeRateRevenue = grossRevenue * 0.15; // 15% Take Rate Fixo
 
       // 3. Custos Variáveis e Fixos (Baseados nos Sliders)
-      const taxes = grossRevenue * 0.06; // 6% Impostos estimados
+      const taxes = takeRateRevenue * 0.06; // 6% Impostos estimados (sobre Take Rate)
       const variableCosts = rides * 0.50; // Custo variável estimado por corrida (servidor/mapa)
       
       // Custos Fixos e Marketing
@@ -647,7 +647,7 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
       const grossRevenue = Number((rides * avgFare).toFixed(2));
       const takeRateRevenue = grossRevenue * 0.15;
 
-      const taxes = grossRevenue * 0.06;
+      const taxes = takeRateRevenue * 0.06;
       const variableCosts = rides * 0.50;
       const fixedCosts = params.fixedCosts;
       const marketing = params.marketingMonthly + params.mktMensalOff + params.trafegoPago;
