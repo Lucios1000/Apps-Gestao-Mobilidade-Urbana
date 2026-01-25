@@ -1,9 +1,11 @@
 {
-  "name": "tkx-franca---dashboard-de-viabilidade-v.4.0",
+  "name": "app-tkx-franca",
   "private": true,
-  "version": "0.0.0",
+  "version": "6.0.0",
+  "description": "Painel de Viabilidade Financeira TKX Franca v.6",
   "type": "module",
-"scripts": {    "dev": "vite",    
+  "scripts": {
+    "dev": "vite",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "build": "tsc && vite build",

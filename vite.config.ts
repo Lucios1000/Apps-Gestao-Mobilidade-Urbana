@@ -1,11 +1,11 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-// PWA plugin é carregado dinamicamente para evitar falhas locais sem dependência instalada
 
 export default defineConfig(async ({ mode }) => {
     const env = loadEnv(mode, '.', '');
     const plugins: any[] = [react()];
+    
     try {
       const { VitePWA } = await import('vite-plugin-pwa');
       plugins.push(
@@ -14,10 +14,11 @@ export default defineConfig(async ({ mode }) => {
           includeAssets: ['icon.svg'],
           devOptions: { enabled: false },
           manifest: {
-            name: 'TKX Franca — Viabilidade Financeira',
-            short_name: 'TKX Franca',
-            start_url: '/Lucios1000-novos-apps/',
-            scope: '/Lucios1000-novos-apps/',
+            name: 'TKX Franca — Viabilidade Financeira v.6',
+            short_name: 'TKX v.6',
+            // CORREÇÃO: Alinhado com o nome do repositório no GitHub
+            start_url: '/App-tkx-Franca/',
+            scope: '/App-tkx-Franca/',
             display: 'standalone',
             theme_color: '#0f172a',
             background_color: '#0b1220',
@@ -31,18 +32,21 @@ export default defineConfig(async ({ mode }) => {
           }
         })
       );
-    } catch {}
+    } catch (err) {
+      console.log("PWA Plugin não carregado:", err);
+    }
+
     return {
-      // Usa base relativa ao repositório para GitHub Pages (projeto: /Lucios1000-novos-apps/)
-      base: mode === 'production' ? '/Lucios1000-novos-apps/' : '/',
+      // CORREÇÃO: Agora o build saberá onde encontrar os arquivos no GitHub Pages
+      base: mode === 'production' ? '/App-tkx-Franca/' : '/',
       server: {
         port: 3001,
         host: '0.0.0.0',
       },
-        preview: {
-          port: 4174,
-          host: '0.0.0.0',
-        },
+      preview: {
+        port: 4174,
+        host: '0.0.0.0',
+      },
       plugins,
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
