@@ -14,11 +14,12 @@ export default defineConfig(async ({ mode }) => {
           includeAssets: ['icon.svg'],
           devOptions: { enabled: false },
           manifest: {
-            name: 'TKX Franca — Viabilidade Financeira v.6',
+            // Nome traduzido em destaque com o original em parênteses menor
+            name: 'Painel de Viabilidade Financeira v.6 (TKX Franca — Viabilidade Financeira v.6)',
             short_name: 'TKX v.6',
-            // CORREÇÃO: Alinhado com o nome do repositório no GitHub
-            start_url: '/App-tkx-Franca/',
-            scope: '/App-tkx-Franca/',
+            // AJUSTE: Alinhado com o nome real do repositório: Aplicativo-tkx-Franca
+            start_url: '/Aplicativo-tkx-Franca/',
+            scope: '/Aplicativo-tkx-Franca/',
             display: 'standalone',
             theme_color: '#0f172a',
             background_color: '#0b1220',
@@ -37,8 +38,8 @@ export default defineConfig(async ({ mode }) => {
     }
 
     return {
-      // CORREÇÃO: Agora o build saberá onde encontrar os arquivos no GitHub Pages
-      base: mode === 'production' ? '/App-tkx-Franca/' : '/',
+      // AJUSTE: Base de produção agora aponta para o repositório correto
+      base: mode === 'production' ? '/Aplicativo-tkx-Franca/' : '/',
       server: {
         port: 3001,
         host: '0.0.0.0',
