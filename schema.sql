@@ -7,36 +7,6 @@ CREATE TABLE IF NOT EXISTS motoristas (
     saldo_a_receber REAL DEFAULT 0.00
 );
 
--- 2. Tabela de Horários e Multiplicadores (Para automação das Tabelas 1.0 a 1.3)
-CREATE TABLE IF NOT EXISTS grade_horarios (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    periodo TEXT, -- Ex: Madrugada, Pico, Normal
-    hora_inicio TIME,
-    hora_fim TIME,
-    multiplicador REAL -- Ex: 1.20
-);
-
--- 3. Tabela Principal de Corridas (Onde o DRE nasce)
-CREATE TABLE IF NOT EXISTS historico_corridas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    motorista_id INTEGER,
-    valor_total_pago REAL, -- Valor do Slider
-    km_distancia REAL,
-    taxa_app_valor REAL, -- Os 15% calculados na hora
-    custo_gateway REAL, -- Os 2.5% 
-    custos_fixos_totais REAL, -- Soma do Seguro + Manutencao + Provisao 
-    liquido_motorista REAL,
-    data_corrida DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (motorista_id) REFERENCES motoristas(id)
-);
-
--- Inserindo os multiplicadores base
-INSERT INTO grade_horarios (periodo, hora_inicio, hora_fim, multiplicador) VALUES 
-('Madrugada', '00:00', '05:59', 1.2),
-('Normal', '06:00', '17:59', 1.0),
-('Pico', '18:00', '20:59', 1.1),
-('Noite', '21:00', '23:59', 1.2);
-
 -- 4. Refinando a Tabela de Motoristas (com campos reais)
 CREATE TABLE IF NOT EXISTS motoristas_cadastro (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,3 +29,64 @@ CREATE TABLE IF NOT EXISTS clientes (
     total_corridas INTEGER DEFAULT 0,
     nota_media REAL DEFAULT 5.0
 );
+
+CREATE VIEW IF NOT EXISTS clientes_cadastro AS
+SELECT
+    id,
+    nome,
+    email,
+    telefone,
+    data_cadastro,
+    total_corridas,
+    nota_media
+FROM clientes;
+
+-- 2. Tabela de Horários e Multiplicadores (Para automação das Tabelas 1.0 a 1.3)
+CREATE TABLE IF NOT EXISTS grade_horarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    periodo TEXT UNIQUE, -- Ex: Madrugada, Pico, Normal
+    hora_inicio TIME,
+    hora_fim TIME,
+    multiplicador REAL -- Ex: 1.20
+);
+
+CREATE TABLE IF NOT EXISTS tarifas_dinamicas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    periodo TEXT UNIQUE,
+    hora_inicio TIME,
+    hora_fim TIME,
+    multiplicador REAL
+);
+
+-- 3. Tabela Principal de Corridas (Onde o DRE nasce)
+CREATE TABLE IF NOT EXISTS historico_corridas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    motorista_id INTEGER,
+    cliente_id INTEGER,
+    valor_total_pago REAL, -- Valor do Slider
+    km_distancia REAL,
+    taxa_app_valor REAL, -- Os 15% calculados na hora
+    custo_gateway REAL, -- Os 2.5% 
+    custos_fixos_totais REAL, -- Soma do Seguro + Manutencao + Provisao 
+    liquido_motorista REAL,
+    hora_partida TEXT,
+    preco_concorrente REAL,
+    avaliacao_motorista INTEGER,
+    data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    data_corrida DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (motorista_id) REFERENCES motoristas_cadastro(id),
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+);
+
+-- Inserindo os multiplicadores base
+INSERT OR IGNORE INTO grade_horarios (periodo, hora_inicio, hora_fim, multiplicador) VALUES 
+('Madrugada', '00:00', '05:59', 1.2),
+('Normal', '06:00', '17:59', 1.0),
+('Pico', '18:00', '20:59', 1.1),
+('Noite', '21:00', '23:59', 1.2);
+
+INSERT OR IGNORE INTO tarifas_dinamicas (periodo, hora_inicio, hora_fim, multiplicador) VALUES 
+('Madrugada', '00:00', '05:59', 1.2),
+('Normal', '06:00', '17:59', 1.0),
+('Pico', '18:00', '20:59', 1.1),
+('Noite', '21:00', '23:59', 1.2);
