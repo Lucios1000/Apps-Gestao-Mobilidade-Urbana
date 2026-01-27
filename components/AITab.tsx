@@ -21,7 +21,7 @@ const AITab: React.FC<AITabProps> = ({ currentParams, projections, audits, scena
    {
   id: 'debug-auth',
   role: 'assistant',
-  content: `🔧 Debug: API Key configurada: ${import.meta.env.VITE_GEMINI_API_KEY ? '✅ Sim' : '❌ Não'}`,
+  content: `🔧 Debug: API Key configurada: ${import.meta.env.VITE_GEMINI_API_KEY ? '✅ Sim' : '❌ Não (Verifique VITE_GEMINI_API_KEY no .env)'}`,
   timestamp: new Date(),
 },
 ]);
@@ -117,7 +117,7 @@ Abra o console do navegador (F12) para ver logs detalhados.`,
     console.log('🔑 API Key length:', apiKey?.length);
 
     if (!apiKey) {
-      throw new Error('Chave da API do Gemini não configurada. Adicione VITE_GEMINI_API_KEY ao arquivo .env');
+      throw new Error('Chave da API não encontrada. Crie um arquivo .env na raiz com: VITE_GEMINI_API_KEY=sua_chave_aqui');
     }
 
     try {

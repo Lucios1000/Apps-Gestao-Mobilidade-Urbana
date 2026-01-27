@@ -8,7 +8,7 @@ import {
   ToggleLeft, ToggleRight, Table as TableIcon, Database, ChevronLeft, ChevronRight, FileCode, Globe
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, AreaChart, Area
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, AreaChart, Area, PieChart, Pie, Legend, LineChart, Line, ComposedChart
 } from 'recharts';
 
 interface InitialPlanningTabProps {
@@ -104,10 +104,10 @@ export const InitialPlanningTab: React.FC<InitialPlanningTabProps> = ({ currentP
 
   // Configuração Técnica
   const [tariffSchedules, setTariffSchedules] = useState([
-    { id: 'dawn', label: 'Madrugada (00h-06h)', start: 0, end: 6, dynamic: 1.4, basePrice: 13.00 },
-    { id: 'normal', label: 'Normal (06h-18h)', start: 6, end: 18, dynamic: 1.0, basePrice: 10.10 },
-    { id: 'peak', label: 'Pico (18h-21h)', start: 18, end: 21, dynamic: 1.1, basePrice: 10.80 },
-    { id: 'night', label: 'Noite (21h-00h)', start: 21, end: 24, dynamic: 1.2, basePrice: 11.50 },
+    { id: 'dawn', label: 'Madrugada (00h-06h)', start: 0, end: 6, dynamic: 1.4, basePrice: 5.20 },
+    { id: 'normal', label: 'Normal (06h-18h)', start: 6, end: 18, dynamic: 1.0, basePrice: 4.00 },
+    { id: 'peak', label: 'Pico (18h-21h)', start: 18, end: 21, dynamic: 1.1, basePrice: 4.40 },
+    { id: 'night', label: 'Noite (21h-00h)', start: 21, end: 24, dynamic: 1.2, basePrice: 4.80 },
   ]);
   const [selectedScheduleId, setSelectedScheduleId] = useState('normal');
 
@@ -125,9 +125,9 @@ export const InitialPlanningTab: React.FC<InitialPlanningTabProps> = ({ currentP
     setTariffSchedules(prev => prev.map(s => s.id === selectedScheduleId ? { ...s, dynamic: val } : s));
   };
   
-  const [costPerKm, setCostPerKm] = useState(2.538);
+  const [costPerKm, setCostPerKm] = useState(2.02);
   const [costPerMin, setCostPerMin] = useState(0); // Substituído por valor inicial fixo na lógica
-  const [minFare, setMinFare] = useState(11.50);
+  const [minFare, setMinFare] = useState(9.00);
   const [includedKm, setIncludedKm] = useState(1.1);
   const [avgDistance, setAvgDistance] = useState(5);
   const [avgTime, setAvgTime] = useState(10);
@@ -135,7 +135,7 @@ export const InitialPlanningTab: React.FC<InitialPlanningTabProps> = ({ currentP
   // Custos Unitários Fixos (DRE Unitário)
   const [gatewayFeePct, setGatewayFeePct] = useState(2.5);
   const [insuranceFixed, setInsuranceFixed] = useState(0.60);
-  const [techFeeFixed, setTechFeeFixed] = useState(0.70);
+  const [techFeeFixed, setTechFeeFixed] = useState(0.75);
   const [legalProvision, setLegalProvision] = useState(0.35);
   const [trafficContingencyPct, setTrafficContingencyPct] = useState(0);
 
@@ -240,10 +240,10 @@ export const InitialPlanningTab: React.FC<InitialPlanningTabProps> = ({ currentP
 
   const resetTariffs = () => {
     setTariffSchedules([
-      { id: 'dawn', label: 'Madrugada (00h-06h)', start: 0, end: 6, dynamic: 1.4, basePrice: 13.00 },
-      { id: 'normal', label: 'Normal (06h-18h)', start: 6, end: 18, dynamic: 1.0, basePrice: 10.10 },
-      { id: 'peak', label: 'Pico (18h-21h)', start: 18, end: 21, dynamic: 1.1, basePrice: 10.80 },
-      { id: 'night', label: 'Noite (21h-00h)', start: 21, end: 24, dynamic: 1.2, basePrice: 11.50 },
+      { id: 'dawn', label: 'Madrugada (00h-06h)', start: 0, end: 6, dynamic: 1.4, basePrice: 5.20 },
+      { id: 'normal', label: 'Normal (06h-18h)', start: 6, end: 18, dynamic: 1.0, basePrice: 4.00 },
+      { id: 'peak', label: 'Pico (18h-21h)', start: 18, end: 21, dynamic: 1.1, basePrice: 4.40 },
+      { id: 'night', label: 'Noite (21h-00h)', start: 21, end: 24, dynamic: 1.2, basePrice: 4.80 },
     ]);
     setSelectedScheduleId('normal');
   };
@@ -619,21 +619,74 @@ CREATE TABLE IF NOT EXISTS clientes (
     
     // Aplica dinâmica conforme lógica do ticket técnico
     const valorComDinamica = valorBrutoTeorico * dynamicFactor;
-    const valorBruto = Math.max(valorComDinamica, minFare);
+    
+    // Nova Lógica: Preço = TaxaTecnologia + max(TMín, TB + (KM * Distância))
+    const valorCalculado = Math.max(valorComDinamica, minFare);
+    const valorBruto = valorCalculado + (enableTech ? techFeeFixed : 0);
 
     const taxaPlataformaPercent = 15;
-    const taxaPlataforma = technicalPricing.platformCommission;
-    const valorLiquido = technicalPricing.driverRepasse;
+    const taxaPlataforma = valorCalculado * (taxaPlataformaPercent / 100);
+    const valorLiquido = valorCalculado - taxaPlataforma;
 
     const custoKm = enableDriverCosts ? (driverFuelCost + driverMaintenanceCost) : 0;
     const despesasTotais = avgDistance * custoKm;
 
     const lucroLiquido = valorLiquido - despesasTotais;
-
     return {
         kmAdicionais, valorAdicional, valorBruto, taxaPlataforma, valorLiquido, despesasTotais, lucroLiquido
     };
   }, [avgDistance, includedKm, costPerKm, baseFare, minFare, dynamicFactor, driverFuelCost, driverMaintenanceCost, enableDriverCosts, technicalPricing.platformCommission, technicalPricing.driverRepasse]);
+
+  // Dados para o gráfico de Composição de Custos (Donut)
+  const costCompositionData = useMemo(() => {
+    // Usando valores do detailedCalculator e estados locais
+    return [
+      { name: 'Repasse Motorista', value: detailedCalculator.valorLiquido, fill: '#22c55e' }, // Verde
+      { name: 'Taxa Tech (Fixa)', value: enableTech ? techFeeFixed : 0, fill: '#3b82f6' }, // Azul
+      { name: 'Ganho Líquido TKX', value: detailedCalculator.taxaPlataforma, fill: '#f59e0b' }, // Amarelo/Laranja
+      { name: 'Custos Externos (Gateway/Seguro)', value: (enableGateway ? gmv * (gatewayFeePct / 100) : 0) + (enableInsurance ? insuranceFixed : 0) + (enableLegal ? legalProvision : 0), fill: '#ef4444' } // Vermelho
+    ].filter(d => d.value > 0);
+  }, [detailedCalculator, enableTech, techFeeFixed, enableGateway, gmv, gatewayFeePct, enableInsurance, insuranceFixed, enableLegal, legalProvision]);
+
+  // Dados para Análise de Sensibilidade (Combustível)
+  const fuelSensitivityData = useMemo(() => {
+    const variations = [-0.2, -0.1, 0, 0.1, 0.2];
+    return variations.map(v => {
+      const fuelPrice = driverFuelCost * (1 + v);
+      const totalExpenses = avgDistance * (fuelPrice + driverMaintenanceCost);
+      const net = detailedCalculator.valorLiquido - totalExpenses;
+      return {
+        variation: `${v > 0 ? '+' : ''}${(v * 100).toFixed(0)}%`,
+        fuelPrice,
+        netProfit: net
+      };
+    });
+  }, [driverFuelCost, driverMaintenanceCost, avgDistance, detailedCalculator.valorLiquido]);
+
+  // Dados para o gráfico de Lucro do Motorista vs. Distância
+  const driverProfitVsDistanceData = useMemo(() => {
+    return Array.from({ length: 15 }, (_, i) => {
+        const distance = (i + 1) * 1.5; // de 1.5km a 22.5km
+        const kmAdicionais = Math.max(0, distance - includedKm);
+        const valorAdicional = kmAdicionais * costPerKm;
+        const valorBrutoTeorico = baseFare + valorAdicional;
+        const valorComDinamica = valorBrutoTeorico * dynamicFactor;
+        const valorCalculado = Math.max(valorComDinamica, minFare);
+        
+        const taxaPlataforma = valorCalculado * 0.15;
+        const valorLiquido = valorCalculado - taxaPlataforma;
+
+        const custoKm = enableDriverCosts ? (driverFuelCost + driverMaintenanceCost) : 0;
+        const despesasTotais = distance * custoKm;
+        const lucroLiquido = valorLiquido - despesasTotais;
+
+        return {
+            distance: `${distance.toFixed(1)} km`,
+            lucro: lucroLiquido,
+            receita: valorLiquido,
+        };
+    });
+  }, [includedKm, costPerKm, baseFare, minFare, dynamicFactor, driverFuelCost, driverMaintenanceCost, enableDriverCosts]);
 
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const formatNumber = (val: number) => val.toLocaleString('pt-BR');
@@ -1006,12 +1059,20 @@ CREATE TABLE IF NOT EXISTS clientes (
                   <span className="text-slate-300">{formatCurrency(detailedCalculator.valorAdicional)}</span>
                 </div>
                 <div className="flex justify-between text-[10px] border-b border-slate-800 pb-1">
-                  <span className="text-slate-100 font-bold">(=) Valor Bruto</span>
+                  <span className="text-slate-100 font-bold">(=) Subtotal Corrida</span>
+                  <span className="text-slate-100 font-bold">{formatCurrency(detailedCalculator.valorBruto - (enableTech ? techFeeFixed : 0))}</span>
+                </div>
+                <div className="flex justify-between text-[10px] pt-1">
+                  <span className="text-blue-400 font-bold">(+) Taxa Tecnologia (Fixa)</span>
+                  <span className="text-blue-400 font-bold">{formatCurrency(enableTech ? techFeeFixed : 0)}</span>
+                </div>
+                <div className="flex justify-between text-xs font-black bg-slate-800/50 p-1 rounded">
+                  <span className="text-white">(=) Valor Total (Passageiro)</span>
                   <span className="text-slate-100 font-bold">{formatCurrency(detailedCalculator.valorBruto)}</span>
                 </div>
-
-                <div className="flex justify-between text-[10px] pt-1">
-                  <span className="text-red-400">(-) Taxa Plataforma (15%)</span>
+                
+                <div className="flex justify-between text-[10px] pt-2">
+                  <span className="text-red-400">(-) Comissão TKX (15%)</span>
                   <span className="text-red-400">{formatCurrency(detailedCalculator.taxaPlataforma)}</span>
                 </div>
                 <div className="flex justify-between text-[10px]">
@@ -1198,6 +1259,74 @@ CREATE TABLE IF NOT EXISTS clientes (
                   />
                 </AreaChart>
               </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Novo Gráfico: Composição de Custos (Donut) */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm mt-6">
+          <h3 className="text-lg font-bold text-slate-100 mb-2">Composição do Ticket (Proteção de Margem)</h3>
+          <p className="text-xs text-slate-400 mb-4">Visualização da distribuição do valor pago pelo passageiro, destacando a proteção do Custo Fixo de Tecnologia.</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={costCompositionData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {costCompositionData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} stroke="rgba(0,0,0,0.2)" />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f1f5f9' }}
+                    formatter={(value: number) => formatCurrency(value)} 
+                  />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700/50">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-slate-400 uppercase font-bold">Ticket Total</span>
+                  <span className="text-lg font-black text-white">{formatCurrency(detailedCalculator.valorBruto)}</span>
+                </div>
+                <div className="h-px bg-slate-700 my-2"></div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-blue-400 font-bold flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      Taxa Tech (Fixa)
+                    </span>
+                    <span className="text-blue-400 font-bold">{formatCurrency(enableTech ? techFeeFixed : 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-yellow-500 font-bold flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                      Ganho Líquido TKX
+                    </span>
+                    <span className="text-yellow-500 font-bold">{formatCurrency(detailedCalculator.taxaPlataforma)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-green-500 font-bold flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      Repasse Motorista
+                    </span>
+                    <span className="text-green-500 font-bold">{formatCurrency(detailedCalculator.valorLiquido)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-500 italic">
+                * O Custo Fixo de Tecnologia (R$ {techFeeFixed.toFixed(2)}) garante a cobertura dos custos de infraestrutura independente do valor da corrida ou descontos aplicados.
+              </div>
             </div>
           </div>
         </div>
@@ -1399,6 +1528,50 @@ CREATE TABLE IF NOT EXISTS clientes (
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Nova Seção: Análise de Sensibilidade (Combustível) */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm mt-6">
+          <h3 className="text-lg font-bold text-slate-100 mb-2">Análise de Sensibilidade: Combustível</h3>
+          <p className="text-xs text-slate-400 mb-4">Impacto da variação do preço do combustível no lucro líquido do motorista por corrida.</p>
+          <div className="h-[200px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={fuelSensitivityData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                <XAxis dataKey="variation" stroke="#94a3b8" fontSize={10} label={{ value: 'Variação Preço Combustível', position: 'insideBottom', offset: -5, fontSize: 10, fill: '#64748b' }} />
+                <YAxis stroke="#94a3b8" fontSize={10} tickFormatter={(v) => `R$${v.toFixed(2)}`} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f1f5f9' }}
+                  formatter={(value: number) => [formatCurrency(value), 'Lucro Líquido']}
+                  labelFormatter={(label) => `Variação: ${label}`}
+                />
+                <Line type="monotone" dataKey="netProfit" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', stroke: '#064e3b', strokeWidth: 1 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Novo Gráfico: Análise de Rentabilidade do Motorista */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm mt-6">
+          <h3 className="text-lg font-bold text-slate-100 mb-2">Análise de Rentabilidade do Motorista</h3>
+          <p className="text-xs text-slate-400 mb-4">Simulação do lucro líquido do motorista por corrida, variando a distância.</p>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={driverProfitVsDistanceData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="distance" stroke="#94a3b8" fontSize={10} />
+                <YAxis stroke="#94a3b8" fontSize={10} tickFormatter={(v) => `R$${v.toFixed(2)}`} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
+                  formatter={(value: number) => formatCurrency(value)}
+                />
+                <Legend />
+                <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="3 3" />
+                <Bar dataKey="receita" name="Repasse Bruto" fill="#3b82f6" />
+                <Line type="monotone" dataKey="lucro" name="Lucro Líquido (após custos)" stroke="#10b981" strokeWidth={3} />
+              </ComposedChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>

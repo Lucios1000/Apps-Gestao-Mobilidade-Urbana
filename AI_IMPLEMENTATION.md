@@ -14,7 +14,7 @@ O projeto já está configurado para usar o **Google Gemini** como provedor de I
 1. **Obtenha sua chave da API** seguindo o passo a passo acima
 2. **Substitua no arquivo `.env`**:
    ```
-   REACT_APP_GEMINI_API_KEY=sua_chave_aqui
+   VITE_GEMINI_API_KEY=sua_chave_aqui
    ```
 3. **Reinicie o servidor de desenvolvimento**:
    ```bash

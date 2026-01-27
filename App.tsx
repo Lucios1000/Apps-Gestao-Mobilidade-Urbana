@@ -1,5 +1,5 @@
 ﻿import React, { useMemo, useState, useEffect, Suspense, lazy } from 'react';
-import { MapPin, Clock, Zap, Wallet, Users, Car, Briefcase, TrendingUp, DollarSign, Activity, Target, Globe, Database, Save, Trash2, FolderOpen, ChevronDown, ChevronUp, ChevronsDown, ChevronsUp } from 'lucide-react';
+import { MapPin, Clock, Zap, Wallet, Users, Car, Briefcase, TrendingUp, DollarSign, Activity, Target, Globe, Database, Save, Trash2, FolderOpen, ChevronDown, ChevronUp, ChevronsDown, ChevronsUp, AlertTriangle } from 'lucide-react';
 import Layout from './components/Layout';
 import SnapshotModal from './components/SnapshotModal';
 import { ImplementationTab } from './ImplementationTab';
@@ -27,13 +27,13 @@ import {
   ReferenceLine,
   Area,
   AreaChart,
+  FunnelChart,
+  Funnel,
+  LabelList,
 } from 'recharts';
 import { DarkTooltip, NeutralLegend } from './components/ChartUI';
 
-const ComparisonTab = React.lazy(() => import('./components/ComparisonTab'));
-const TrendAnalysisTab = React.lazy(() => import('./components/TrendAnalysisTab'));
 const AITab = React.lazy(() => import('./components/AITab'));
-const TestTab = React.lazy(() => import('./components/TestTab'));
 
 // Wrapper para lazy loading com fallback
 const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -258,6 +258,7 @@ interface DashboardProps {
 const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) => {
   const [modo, setModo] = useState<'Simulação' | 'Real'>('Simulação');
   const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
+  const [viewMode, setViewMode] = useState<'monthly' | 'quarterly'>('monthly');
   const {
     activeTab,
     setActiveTab,
@@ -1413,6 +1414,42 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
             </ComposedChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Novo Gráfico: Análise de Break-even (Ponto de Equilíbrio) */}
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl mt-6">
+          <div className="text-[10px] uppercase text-slate-400 font-black mb-2">Análise de Ponto de Equilíbrio (Break-even)</div>
+          <div className="text-xs text-slate-500 mb-4">Comparativo de receita: Ticket Atual vs Ticket Reduzido (-10% e -20%)</div>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart
+              data={Array.from({ length: 11 }, (_, i) => {
+                const volFactor = 0.5 + (i * 0.1); // 50% a 150% do volume
+                const baseVol = 1000; // Volume base arbitrário para simulação
+                const currentPrice = currentParams.avgFare;
+                return {
+                  volPct: `${(volFactor * 100).toFixed(0)}%`,
+                  vol: baseVol * volFactor,
+                  revenueCurrent: baseVol * volFactor * currentPrice,
+                  revenueMinus10: baseVol * volFactor * (currentPrice * 0.9),
+                  revenueMinus20: baseVol * volFactor * (currentPrice * 0.8),
+                  targetRevenue: baseVol * 1.0 * currentPrice // Linha de referência (Receita atual com volume 100%)
+                };
+              })}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="volPct" stroke="#475569" fontSize={10} label={{ value: 'Volume de Corridas', position: 'insideBottom', offset: -5, fontSize: 10, fill: '#64748b' }} />
+              <YAxis stroke="#475569" fontSize={10} tickFormatter={(v) => `R$${v/1000}k`} />
+              <Tooltip content={<DarkTooltip formatter={(v) => formatCurrency(v as number)} />} cursor={{ stroke: '#475569', strokeWidth: 1 }} />
+              <Legend content={<NeutralLegend />} />
+              <ReferenceLine y={1000 * currentParams.avgFare} stroke="#64748b" strokeDasharray="3 3" label={{ value: 'Receita Atual (Base)', fill: '#64748b', fontSize: 10 }} />
+              <Line type="monotone" dataKey="revenueCurrent" name="Ticket Atual" stroke="#22c55e" strokeWidth={3} dot={false} />
+              <Line type="monotone" dataKey="revenueMinus10" name="Ticket -10%" stroke="#eab308" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="revenueMinus20" name="Ticket -20%" stroke="#ef4444" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="mt-3 text-[10px] text-slate-400 bg-slate-800/30 p-2 rounded">
+            💡 <strong>Insight:</strong> Para compensar uma redução de 10% no ticket, é necessário um aumento de aproximadamente <strong>11.1%</strong> no volume de corridas para manter o mesmo faturamento bruto.
+          </div>
+        </div>
       </div>
     );
   };
@@ -1427,6 +1464,14 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
       { name: 'Indique/Ganhe', value: currentParams.indiqueGanhe || 0 },
     ];
     const colors = ['#0b1220', '#f59e0b', '#eab308', '#e5e7eb', '#ef4444', '#fbbf24'];
+
+    // Lógica para alerta de LTV/CAC
+    const lastProj = displayProjections[displayProjections.length - 1];
+    const ltv = lastProj?.ltv || 0;
+    const cac = lastProj?.cac || 0;
+    const ratio = cac > 0 ? ltv / cac : 0;
+    const isCritical = ratio < 1 && cac > 0;
+    const isWarning = ratio < 3 && ratio >= 1 && cac > 0;
 
     const getSectionTotal = (keys: string[]) => {
       let currencySum = 0;
@@ -1533,6 +1578,23 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
 
     return (
       <div className="space-y-6">
+        {/* Alerta Visual de LTV/CAC */}
+        {(isCritical || isWarning) && (
+           <div className={`p-4 rounded-xl border ${isCritical ? 'bg-red-900/20 border-red-500/50 text-red-200' : 'bg-orange-900/20 border-orange-500/50 text-orange-200'}`}>
+             <div className="flex items-center gap-3">
+               <AlertTriangle className="w-6 h-6" />
+               <div>
+                 <h4 className="font-bold text-sm uppercase">{isCritical ? 'Crítico: CAC Superior ao LTV' : 'Atenção: Eficiência de Marketing Baixa'}</h4>
+                 <p className="text-xs mt-1">
+                   {isCritical 
+                     ? `O custo de aquisição (R$ ${cac.toLocaleString('pt-BR', {minimumFractionDigits: 2})}) supera o valor do cliente (R$ ${ltv.toLocaleString('pt-BR', {minimumFractionDigits: 2})}). Ajuste campanhas ou aumente a retenção.`
+                     : `A relação LTV/CAC está em ${ratio.toFixed(1)}x (Ideal > 3x). Considere otimizar investimentos.`}
+                 </p>
+               </div>
+             </div>
+           </div>
+        )}
+
         {/* Barra de Presets de Marketing */}
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -1769,6 +1831,42 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
             </div>
           ), ['marketingMonthly', 'mktMensalOff', 'trafegoPago', 'adesaoTurbo', 'parceriasBares', 'indiqueGanhe'])}
 
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+              <h4 className="text-[10px] uppercase text-slate-400 font-black mb-4">Funil de Conversão (Eficiência de Aquisição)</h4>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <FunnelChart>
+                    <Tooltip content={<DarkTooltip />} />
+                    <Funnel dataKey="value" data={[
+                        { value: 10000, name: 'Impressões', fill: '#3b82f6' },
+                        { value: 4500, name: 'Cliques (CTR 45%)', fill: '#6366f1' },
+                        { value: 1200, name: 'Instalações (26%)', fill: '#8b5cf6' },
+                        { value: 800, name: 'Cadastros (66%)', fill: '#a855f7' },
+                        { value: 350, name: '1ª Corrida (43%)', fill: '#d946ef' },
+                      ]} isAnimationActive>
+                      <LabelList position="right" fill="#fff" stroke="none" dataKey="name" />
+                    </Funnel>
+                  </FunnelChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+              <h4 className="text-[10px] uppercase text-slate-400 font-black mb-4">Evolução do Custo de Aquisição (CAC)</h4>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={displayProjections.slice(0, 24).filter(p => p.cac > 0 && isFinite(p.cac))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="month" tickFormatter={(v) => `M${v}`} stroke="#475569" fontSize={10} />
+                    <YAxis stroke="#475569" fontSize={10} tickFormatter={(v) => formatCurrency(v)} />
+                    <Tooltip content={<DarkTooltip formatter={(v) => formatCurrency(v as number)} />} />
+                    <Line type="monotone" dataKey="cac" name="CAC" stroke="#ef4444" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
           {renderAccordion('fidelidade', 'Fidelidade (TKX Dynamic Control)', <Target className="w-4 h-4 text-orange-400" />, (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {renderSliderInput('eliteDriversSemestral')}
@@ -1938,6 +2036,7 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
                 <th className="p-2 text-right">Capacidade</th>
                 <th className="p-2 text-right">Realizado</th>
                 <th className="p-2 text-right">Gap Corridas</th>
+                <th className="p-2 text-right">Sugestão Add</th>
                 <th className="p-2 text-right">Utiliz. MPD</th>
                 <th className="p-2 text-right">Status</th>
               </tr>
@@ -1945,6 +2044,7 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
             <tbody className="divide-y divide-slate-800/40">
               {rows.map((r, idx) => {
                 const opData = OPERATIONAL_GROWTH[r.month - 1];
+                const driversNeeded = r.demandGap > 0 ? Math.ceil(r.demandGap / (MPD * 30.5)) : 0;
                 return (
                 <tr key={r.month} className={`${idx % 2 === 0 ? 'bg-slate-900/30' : ''} ${r.isBottleneck ? 'bg-red-900/10' : ''}`}>
                   <td className="p-2 font-bold text-slate-100">
@@ -1961,11 +2061,18 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
                   <td className={`p-2 text-right ${r.demandGap > 0 ? 'text-red-400 font-bold' : 'text-green-400'}`}>
                     {r.demandGap > 0 ? `-${Math.round(r.demandGap).toLocaleString('pt-BR')}` : '✓'}
                   </td>
+                  <td className="p-2 text-right font-mono text-yellow-400">
+                     {driversNeeded > 0 ? `+${driversNeeded}` : '-'}
+                  </td>
                   <td className={`p-2 text-right ${r.utilizacao > 90 ? 'text-red-400' : r.utilizacao > 70 ? 'text-orange-400' : 'text-green-400'}`}>
                     {r.utilizacao.toFixed(1)}%
                   </td>
                   <td className="p-2 text-center">
-                    {r.isBottleneck ? <span className="text-red-400 font-bold">🔴 BOTTLENECK</span> : <span className="text-green-400">✓</span>}
+                    {r.isBottleneck ? (
+                      <span className="text-red-400 font-bold text-[9px] block max-w-[180px] mx-auto leading-tight bg-red-900/20 p-1 rounded border border-red-500/30">
+                        ⚠️ Gargalo de atendimento detectado — aumente frota ou reduza CAC para melhorar cobertura.
+                      </span>
+                    ) : <span className="text-green-400">✓</span>}
                   </td>
                 </tr>
                 );
@@ -1998,51 +2105,221 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
             <div className="text-[10px] text-slate-400 mt-1">Corridas perdidas/mês</div>
           </div>
         </div>
+
+        {/* Novo Gráfico: Velocidade de Crescimento */}
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl mt-6">
+          <h3 className="text-sm font-black uppercase text-yellow-500 mb-4">Velocidade de Crescimento (Equilíbrio Oferta x Demanda)</h3>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={displayProjections.slice(0, 36).map((curr, idx, arr) => {
+                  const prev = arr[idx - 1];
+                  const driverGrowth = prev && prev.drivers > 0 ? ((curr.drivers - prev.drivers) / prev.drivers) * 100 : 0;
+                  const userGrowth = prev && prev.users > 0 ? ((curr.users - prev.users) / prev.users) * 100 : 0;
+                  return {
+                    month: `M${curr.month}`,
+                    driverGrowth,
+                    userGrowth,
+                    balance: driverGrowth - userGrowth
+                  };
+                }).filter(d => d.month !== 'M1')} // Remove M1 pois não tem crescimento anterior
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <XAxis dataKey="month" stroke="#475569" fontSize={10} />
+                <YAxis stroke="#475569" fontSize={10} tickFormatter={(v) => `${v.toFixed(0)}%`} />
+                <Tooltip content={<DarkTooltip formatter={(v) => `${(v as number).toFixed(1)}%`} />} />
+                <Legend content={<NeutralLegend />} />
+                <ReferenceLine y={0} stroke="#64748b" />
+                <Line type="monotone" dataKey="userGrowth" name="Cresc. Demanda (Usuários)" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="driverGrowth" name="Cresc. Oferta (Frota)" stroke="#eab308" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-2 text-[10px] text-slate-400">
+            * Monitoramento mensal da taxa de crescimento (%) para evitar desequilíbrios. Linhas próximas indicam crescimento saudável.
+          </div>
+        </div>
       </div>
     );
   };
 
-  const renderProjecoes = () => (
-    <div className="space-y-3">
-      <div className="flex gap-2">
-        {[1, 2, 3].map((period) => (
-          <button
-            key={period}
-            onClick={() => setYearPeriod(period as 1 | 2 | 3)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              yearPeriod === period
-                ? 'bg-yellow-500 text-slate-950'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            }`}
-          >
-            Ano {period} (M{(period - 1) * 12 + 1}-{period * 12})
-          </button>
-        ))}
+  const renderProjecoes = () => {
+    const fullData = useMemo(() => {
+      if (viewMode === 'monthly') return displayProjections;
+      
+      const quarterly = [];
+      for (let i = 0; i < displayProjections.length; i += 3) {
+          const chunk = displayProjections.slice(i, i + 3);
+          if (!chunk.length) continue;
+          const last = chunk[chunk.length - 1];
+          
+          const sum = (key: keyof MonthlyResult) => chunk.reduce((acc, c) => acc + (c[key] as number || 0), 0);
+          
+          quarterly.push({
+              ...last,
+              month: Math.ceil((i + 1) / 3),
+              rides: sum('rides'),
+              grossRevenue: sum('grossRevenue'),
+              takeRateRevenue: sum('takeRateRevenue'),
+              netProfit: sum('netProfit'),
+              fixedCosts: sum('fixedCosts'),
+              totalMarketing: sum('totalMarketing'),
+              variableCosts: sum('variableCosts'),
+              totalTech: sum('totalTech'),
+              cac: sum('cac') / chunk.length,
+              accumulatedProfit: last.accumulatedProfit,
+          });
+      }
+      return quarterly;
+    }, [displayProjections, viewMode]);
+
+    const currentChartData = useMemo(() => {
+        if (viewMode === 'monthly') {
+            return displayProjections.slice((yearPeriod - 1) * 12, yearPeriod * 12);
+        } else {
+            const start = (yearPeriod - 1) * 4;
+            const end = yearPeriod * 4;
+            return fullData.slice(start, end);
+        }
+    }, [displayProjections, fullData, yearPeriod, viewMode]);
+
+    return (
+      <div className="space-y-3">
+        <div className="flex justify-between items-center">
+          <div className="flex gap-2">
+            {[1, 2, 3].map((period) => (
+              <button
+                key={period}
+                onClick={() => setYearPeriod(period as 1 | 2 | 3)}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  yearPeriod === period
+                    ? 'bg-yellow-500 text-slate-950'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                Ano {period} (M{(period - 1) * 12 + 1}-{period * 12})
+              </button>
+            ))}
+          </div>
+          <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+              <button
+                  onClick={() => setViewMode('monthly')}
+                  className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${
+                      viewMode === 'monthly' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+              >
+                  Mensal
+              </button>
+              <button
+                  onClick={() => setViewMode('quarterly')}
+                  className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${
+                      viewMode === 'quarterly' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+              >
+                  Trimestral
+              </button>
+          </div>
+        </div>
+        
+        <h3 className="text-xs font-black uppercase text-yellow-400 tracking-[0.08em]">Projeções de Volume ({viewMode === 'monthly' ? 'Mensal' : 'Trimestral'})</h3>
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl h-[360px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={currentChartData}>
+              <CartesianGrid stroke="#1e293b" vertical={false} strokeDasharray="3 3" />
+              <XAxis dataKey="month" stroke="#475569" fontSize={10} tickFormatter={(v) => viewMode === 'monthly' ? `M${v}` : `Q${v}`} />
+              <YAxis yAxisId="left" stroke="#475569" fontSize={10} />
+              <YAxis yAxisId="right" orientation="right" stroke="#475569" fontSize={10} />
+              <Tooltip content={<DarkTooltip />} cursor={{ fill: 'transparent', stroke: 'transparent' }} />
+              <Legend content={<NeutralLegend />} />
+              <defs>
+                <linearGradient id="gradRidesWarm" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#fbbf24" />
+                  <stop offset="100%" stopColor="#f59e0b" />
+                </linearGradient>
+              </defs>
+              <Bar yAxisId="left" dataKey="rides" name="Corridas" fill="url(#gradRidesWarm)" radius={[8, 8, 2, 2]} opacity={0.95} stroke="#0b1220" strokeWidth={2} />
+              <Line yAxisId="right" type="monotone" dataKey="drivers" name="Frota" stroke="#ef4444" strokeWidth={3} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="users" name="Usuários" stroke="#e5e7eb" strokeWidth={3} dot={false} strokeDasharray="5 3" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            {/* Lucro Acumulado */}
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <h4 className="text-[10px] uppercase text-slate-400 font-black mb-4">Lucro Acumulado (Payback)</h4>
+                <ResponsiveContainer width="100%" height={250}>
+                    <AreaChart data={fullData}>
+                        <defs>
+                            <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="month" tickFormatter={(v) => viewMode === 'monthly' ? `M${v}` : `Q${v}`} stroke="#475569" fontSize={10} />
+                        <YAxis stroke="#475569" fontSize={10} tickFormatter={(v) => `R$${v/1000}k`} />
+                        <Tooltip content={<DarkTooltip formatter={(v) => formatCurrency(v as number)} />} />
+                        <ReferenceLine y={0} stroke="#64748b" />
+                        <Area type="monotone" dataKey="accumulatedProfit" name="Lucro Acumulado" stroke="#22c55e" fill="url(#colorProfit)" />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+
+            {/* Receitas e Lucro */}
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <h4 className="text-[10px] uppercase text-slate-400 font-black mb-4">Receitas vs. Lucro</h4>
+                <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={fullData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="month" tickFormatter={(v) => viewMode === 'monthly' ? `M${v}` : `Q${v}`} stroke="#475569" fontSize={10} />
+                        <YAxis stroke="#475569" fontSize={10} tickFormatter={(v) => `R$${v/1000}k`} />
+                        <Tooltip content={<DarkTooltip formatter={(v) => formatCurrency(v as number)} />} />
+                        <Legend content={<NeutralLegend />} />
+                        <Line type="monotone" dataKey="grossRevenue" name="Receita Bruta (GMV)" stroke="#3b82f6" dot={false} />
+                        <Line type="monotone" dataKey="takeRateRevenue" name="Receita Líquida (Take Rate)" stroke="#eab308" dot={false} />
+                        <Line type="monotone" dataKey="netProfit" name="Lucro Líquido" stroke="#22c55e" dot={false} />
+                    </LineChart>
+                </ResponsiveContainer>
+            </div>
+
+            {/* Composição de Custos */}
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <h4 className="text-[10px] uppercase text-slate-400 font-black mb-4">Composição de Custos {viewMode === 'monthly' ? 'Mensal' : 'Trimestral'}</h4>
+                <ResponsiveContainer width="100%" height={250}>
+                    <AreaChart data={fullData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="month" tickFormatter={(v) => viewMode === 'monthly' ? `M${v}` : `Q${v}`} stroke="#475569" fontSize={10} />
+                        <YAxis stroke="#475569" fontSize={10} tickFormatter={(v) => `R$${v/1000}k`} />
+                        <Tooltip content={<DarkTooltip formatter={(v) => formatCurrency(v as number)} />} />
+                        <Legend content={<NeutralLegend />} />
+                        <Area type="monotone" dataKey="fixedCosts" name="Fixos" stackId="1" stroke="#8b5cf6" fill="#8b5cf6" />
+                        <Area type="monotone" dataKey="totalMarketing" name="Marketing" stackId="1" stroke="#ec4899" fill="#ec4899" />
+                        <Area type="monotone" dataKey="variableCosts" name="Variáveis" stackId="1" stroke="#f43f5e" fill="#f43f5e" />
+                        <Area type="monotone" dataKey="totalTech" name="Tech" stackId="1" stroke="#6366f1" fill="#6366f1" />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+
+            {/* CAC vs LTV */}
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <h4 className="text-[10px] uppercase text-slate-400 font-black mb-4">Saúde da Aquisição (CAC vs. LTV)</h4>
+                <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={fullData.filter(p => p.cac > 0 && isFinite(p.cac))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="month" tickFormatter={(v) => viewMode === 'monthly' ? `M${v}` : `Q${v}`} stroke="#475569" fontSize={10} />
+                        <YAxis stroke="#475569" fontSize={10} tickFormatter={(v) => formatCurrency(v)} />
+                        <Tooltip content={<DarkTooltip formatter={(v) => formatCurrency(v as number)} />} />
+                        <Legend content={<NeutralLegend />} />
+                        <Line type="monotone" dataKey="ltv" name="LTV" stroke="#22c55e" dot={false} />
+                        <Line type="monotone" dataKey="cac" name="CAC" stroke="#ef4444" dot={false} />
+                    </LineChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
       </div>
-      <h3 className="text-xs font-black uppercase text-yellow-400 tracking-[0.08em]">Projeções de Volume (36 meses)</h3>
-      <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl h-[360px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={displayProjections.slice((yearPeriod - 1) * 12, yearPeriod * 12)}>
-            <CartesianGrid stroke="#1e293b" vertical={false} strokeDasharray="3 3" />
-            <XAxis dataKey="month" stroke="#475569" fontSize={10} />
-            <YAxis yAxisId="left" stroke="#475569" fontSize={10} />
-            <YAxis yAxisId="right" orientation="right" stroke="#475569" fontSize={10} />
-            <Tooltip content={<DarkTooltip />} cursor={{ fill: 'transparent', stroke: 'transparent' }} />
-            <Legend content={<NeutralLegend />} />
-            <defs>
-              <linearGradient id="gradRidesWarm" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#fbbf24" />
-                <stop offset="100%" stopColor="#f59e0b" />
-              </linearGradient>
-            </defs>
-            <Bar yAxisId="left" dataKey="rides" name="Corridas" fill="url(#gradRidesWarm)" radius={[8, 8, 2, 2]} opacity={0.95} stroke="#0b1220" strokeWidth={2} />
-            <Line yAxisId="right" type="monotone" dataKey="drivers" name="Frota" stroke="#ef4444" strokeWidth={3} dot={false} />
-            <Line yAxisId="right" type="monotone" dataKey="users" name="Usuários" stroke="#e5e7eb" strokeWidth={3} dot={false} strokeDasharray="5 3" />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderKpis = () => {
     const last = displayProjections[displayProjections.length - 1];
@@ -2083,22 +2360,91 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
           </div>
         </div>
         {/* Gráfico de Evolução LTV/CAC */}
-        <div className="card-gradient border border-slate-700/40 rounded-xl p-4 bg-slate-900/50">
-          <div className="text-[8px] uppercase text-slate-400 font-black mb-3 tracking-[0.08em]">Evolução de LTV, CAC e Ratio ao Longo de 36 Meses</div>
-          <ResponsiveContainer width="100%" height={240}>
-            <ComposedChart data={ltvCacData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="monthName" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={80} />
-              <YAxis yAxisId="left" tick={{ fontSize: 9 }} stroke="#64748b" />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} stroke="#94a3b8" />
-              <Tooltip content={<DarkTooltip />} cursor={{ fill: 'transparent', stroke: 'transparent' }} />
-              <Legend content={<NeutralLegend />} />
-              <Line yAxisId="left" type="monotone" dataKey="ltv" name="LTV" stroke="#f59e0b" strokeWidth={2.5} dot={false} />
-              <Line yAxisId="left" type="monotone" dataKey="cac" name="CAC" stroke="#ef4444" strokeWidth={2.5} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="ratio" name="LTV/CAC Ratio" stroke="#eab308" strokeWidth={2.5} dot={false} strokeDasharray="4 2" />
-            </ComposedChart>
-          </ResponsiveContainer>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <h4 className="text-[10px] uppercase text-slate-400 font-black mb-4">Evolução de LTV, CAC e Ratio</h4>
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={ltvCacData.filter(p => p.cac > 0 && isFinite(p.cac) && p.ratio > 0 && isFinite(p.ratio))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="month" tickFormatter={(v) => `M${v}`} stroke="#475569" fontSize={10} />
+                <YAxis yAxisId="left" tick={{ fontSize: 9 }} stroke="#64748b" tickFormatter={(v) => `R$${v.toFixed(0)}`} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                <Tooltip content={<DarkTooltip />} cursor={{ fill: 'transparent', stroke: 'transparent' }} />
+                <Legend content={<NeutralLegend />} />
+                <Line yAxisId="left" type="monotone" dataKey="ltv" name="LTV" stroke="#22c55e" strokeWidth={2} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="cac" name="CAC" stroke="#ef4444" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="ratio" name="LTV/CAC Ratio" stroke="#eab308" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="space-y-4">
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl h-[132px]">
+              <h4 className="text-[10px] uppercase text-slate-400 font-black mb-2">Market Share (%)</h4>
+              <ResponsiveContainer width="100%" height="80%">
+                  <AreaChart data={displayProjections}>
+                      <defs><linearGradient id="gradShare" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
+                      <Tooltip content={<DarkTooltip formatter={(v) => formatPercent(v as number)} />} />
+                      <Area type="monotone" dataKey={(p) => (p.users / FRANCA_STATS.digitalUsers) * 100} name="Market Share" stroke="#3b82f6" fill="url(#gradShare)" />
+                  </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl h-[132px]">
+              <h4 className="text-[10px] uppercase text-slate-400 font-black mb-2">Corridas / Motorista / Mês</h4>
+              <ResponsiveContainer width="100%" height="80%">
+                  <BarChart data={displayProjections}>
+                      <defs><linearGradient id="gradRidesDriver" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.5}/><stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/></linearGradient></defs>
+                      <Tooltip content={<DarkTooltip formatter={(v) => (v as number).toFixed(0)} />} />
+                      <Bar dataKey={(p) => p.drivers > 0 ? p.rides / p.drivers : 0} name="Corridas/Motorista" fill="url(#gradRidesDriver)" />
+                  </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
+
+        {/* Novos Gráficos: Cohorts e Saúde do Marketplace */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black mb-4">Cohorts de Retenção (Frequência de Uso)</div>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={displayProjections.slice(0, 36)}>
+                  <defs>
+                    <linearGradient id="colorFreq" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="month" stroke="#475569" fontSize={10} tickFormatter={(v) => `M${v}`} />
+                  <YAxis stroke="#475569" fontSize={10} domain={['dataMin - 0.5', 'dataMax + 0.5']} />
+                  <Tooltip content={<DarkTooltip formatter={(v) => (v as number).toFixed(2)} />} />
+                  <Area type="monotone" dataKey="ridesPerUser" name="Corridas / Usuário" stroke="#10b981" fillOpacity={1} fill="url(#colorFreq)" />
+                  {/* Simulação de aumento de frequência para visualização se os dados forem estáticos */}
+                  <Line type="monotone" dataKey={(d) => d.rides / (d.users || 1)} name="Média Realizada" stroke="#34d399" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="text-[10px] uppercase text-slate-400 font-black mb-4">Saúde do Marketplace (LTV & Base Ativa)</div>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={displayProjections.slice(0, 36)}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="month" stroke="#475569" fontSize={10} tickFormatter={(v) => `M${v}`} />
+                  <YAxis yAxisId="left" stroke="#475569" fontSize={10} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" fontSize={10} />
+                  <Tooltip content={<DarkTooltip />} />
+                  <Legend content={<NeutralLegend />} />
+                  <Bar yAxisId="left" dataKey="users" name="Usuários Ativos" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="ltv" name="LTV Estimado (R$)" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
       </div>
     );
   };
@@ -2383,15 +2729,15 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
         <h3 className="text-sm font-black uppercase text-yellow-500">VisÃ£o 36 meses</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-            <div className="text-[10px] uppercase text-slate-400 font-black">Break-even</div>
-            <div className="text-2xl font-black text-white">{breakEvenIndex !== -1 ? `MÃªs ${results[breakEvenIndex].month}` : 'NÃ£o atingido'}</div>
+            <div className="text-[10px] uppercase text-slate-400 font-black">Break-even (Ponto de Equilíbrio)</div>
+            <div className="text-2xl font-black text-white">{breakEvenIndex !== -1 ? `Mês ${results[breakEvenIndex].month}` : 'Não atingido'}</div>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
             <div className="text-[10px] uppercase text-slate-400 font-black">Payback</div>
-            <div className="text-2xl font-black text-white">{paybackIndex !== -1 ? `MÃªs ${results[paybackIndex].month}` : '> 36m'}</div>
+            <div className="text-2xl font-black text-white">{paybackIndex !== -1 ? `Mês ${results[paybackIndex].month}` : '> 36m'}</div>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-            <div className="text-[10px] uppercase text-slate-400 font-black">{profitLabel(totalProfit36, 'Lucro Acumulado 36m', 'PrejuÃ­zo Acumulado 36m')}</div>
+            <div className="text-[10px] uppercase text-slate-400 font-black">{profitLabel(totalProfit36, 'Lucro Acumulado 36m', 'Prejuízo Acumulado 36m')}</div>
             <div className={`text-2xl font-black ${profitColor(totalProfit36)}`}><CurrencyDisplay value={profitValue(totalProfit36)} colorClass={profitColor(totalProfit36)} /></div>
           </div>
         </div>
@@ -2417,7 +2763,7 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
                         <span className="text-xs font-bold text-blue-400">{s.weekly.toFixed(0)}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[7px] text-slate-400">DiÃ¡ria:</span>
+                        <span className="text-[7px] text-slate-400">Diária:</span>
                         <span className="text-xs font-bold text-orange-400">{s.daily.toFixed(1)}</span>
                       </div>
                     </div>
@@ -3396,10 +3742,6 @@ const DashboardContent: React.FC<DashboardProps> = ({ worldMode, toggleWorld }) 
         );
       case 12:
         return renderResumenEjecutivo();
-      case 13:
-        return <LazyWrapper><ComparisonTab snapshots={snapshots} calculateProjections={calculateProjections} /></LazyWrapper>;
-      case 14:
-        return <LazyWrapper><TrendAnalysisTab snapshots={snapshots} calculateProjections={calculateProjections} /></LazyWrapper>;
       case 15:
         return renderFestasEventos();
       case 16:
@@ -3479,20 +3821,6 @@ case 19:
             {activeTab !== 15 && renderScenarioSelector()}
           </div>
 
-          {(supplyBottleneck || oversupplyWarning) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {supplyBottleneck && (
-                <div className="bg-gradient-to-r from-red-600/20 to-rose-600/10 border-2 border-red-500/50 text-red-100 px-5 py-4 rounded-xl text-sm font-bold shadow-lg shadow-red-500/20">
-                  ⚠️ Gargalo de atendimento detectado — aumente frota ou reduza CAC para melhorar cobertura.
-                </div>
-              )}
-              {oversupplyWarning && (
-                <div className="bg-gradient-to-r from-orange-600/20 to-amber-600/10 border-2 border-orange-500/50 text-orange-100 px-5 py-4 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20">
-                  ⚡ Excesso de oferta de motoristas — ajuste crescimento ou acelere aquisição de usuários.
-                </div>
-              )}
-            </div>
-          )}
 
           {renderTab()}
 
